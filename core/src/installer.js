@@ -107,7 +107,7 @@ async function installSinglePackage(pkg, options = {}) {
 
     onProgress?.({ phase: 'downloading', package: pkg.id });
 
-    // Handle npm-based agents (claude, codex, gemini)
+    // Handle npm-based packages (agents, cloud CLIs)
     if (pkg.npmPackage) {
       try {
         const { execSync } = await import('child_process');
@@ -141,6 +141,42 @@ async function installSinglePackage(pkg, options = {}) {
         return { success: true, id: pkg.id, path: installPath };
       } catch (error) {
         throw new Error(`Failed to install ${pkg.npmPackage}: ${error.message}`);
+      }
+    }
+
+    // Handle pip-based packages (aider, etc.)
+    if (pkg.pipPackage) {
+      try {
+        const { execSync } = await import('child_process');
+
+        if (!fs.existsSync(installPath)) {
+          fs.mkdirSync(installPath, { recursive: true });
+        }
+
+        onProgress?.({ phase: 'installing', package: pkg.id, message: `pip install ${pkg.pipPackage}` });
+
+        // Create a virtual environment
+        execSync(`python3 -m venv "${installPath}/venv"`, { stdio: 'pipe' });
+
+        // Install the pip package in the venv
+        execSync(`"${installPath}/venv/bin/pip" install ${pkg.pipPackage}`, { stdio: 'pipe' });
+
+        // Write runtime metadata
+        fs.writeFileSync(
+          path.join(installPath, 'runtime.json'),
+          JSON.stringify({
+            runtime: runtimeName,
+            version: pkg.version || 'latest',
+            pipPackage: pkg.pipPackage,
+            installedAt: new Date().toISOString(),
+            source: 'pip',
+            venvPath: path.join(installPath, 'venv')
+          }, null, 2)
+        );
+
+        return { success: true, id: pkg.id, path: installPath };
+      } catch (error) {
+        throw new Error(`Failed to install ${pkg.pipPackage}: ${error.message}`);
       }
     }
 
