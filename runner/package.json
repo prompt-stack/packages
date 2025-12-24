@@ -1,0 +1,27 @@
+{
+  "name": "@prompt-stack/runner",
+  "version": "1.0.0",
+  "description": "Execution engine for Prompt Stack - spawn processes, stream logs",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./spawn": "./src/spawn.js",
+    "./stream": "./src/stream.js",
+    "./secrets": "./src/secrets.js",
+    "./db": "./src/db.js"
+  },
+  "scripts": {
+    "test": "node --test src/__tests__/"
+  },
+  "dependencies": {
+    "@prompt-stack/core": "workspace:*",
+    "@prompt-stack/db": "workspace:*",
+    "@prompt-stack/manifest": "workspace:*"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

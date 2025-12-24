@@ -1,0 +1,26 @@
+{
+  "name": "@prompt-stack/core",
+  "version": "1.0.0",
+  "description": "Core logic for Prompt Stack - resolve, install, lockfiles",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./resolver": "./src/resolver.js",
+    "./installer": "./src/installer.js",
+    "./lockfile": "./src/lockfile.js"
+  },
+  "scripts": {
+    "test": "node --test src/__tests__/"
+  },
+  "dependencies": {
+    "@prompt-stack/env": "workspace:*",
+    "@prompt-stack/manifest": "workspace:*",
+    "@prompt-stack/registry-client": "workspace:*",
+    "yaml": "^2.3.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

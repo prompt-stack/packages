@@ -1,0 +1,25 @@
+{
+  "name": "@prompt-stack/db",
+  "version": "1.0.0",
+  "description": "Database layer for Prompt Stack - tracks installs, runs, and artifacts",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./schema": "./src/schema.js",
+    "./search": "./src/search.js",
+    "./stats": "./src/stats.js"
+  },
+  "scripts": {
+    "test": "node --test src/__tests__/"
+  },
+  "dependencies": {
+    "@prompt-stack/env": "workspace:*",
+    "better-sqlite3": "^11.7.0"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

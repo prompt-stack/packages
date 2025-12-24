@@ -1,0 +1,20 @@
+{
+  "name": "@prompt-stack/registry-client",
+  "version": "1.0.0",
+  "description": "Registry client for Prompt Stack - fetch, cache, download, verify",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test src/__tests__/"
+  },
+  "dependencies": {
+    "@prompt-stack/env": "workspace:*"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

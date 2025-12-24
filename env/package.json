@@ -1,0 +1,18 @@
+{
+  "name": "@prompt-stack/env",
+  "version": "1.0.0",
+  "description": "Environment, paths, and platform detection for Prompt Stack",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test src/__tests__/"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}
