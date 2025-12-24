@@ -391,6 +391,33 @@ export async function listInstalled(kind) {
     for (const entry of entries) {
       if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
 
+      // For runtimes, also scan agents/ subdirectory
+      if (k === 'runtime' && entry.name === 'agents') {
+        const agentsDir = path.join(dir, 'agents');
+        if (fs.existsSync(agentsDir)) {
+          const agentEntries = fs.readdirSync(agentsDir, { withFileTypes: true });
+          for (const agentEntry of agentEntries) {
+            if (!agentEntry.isDirectory() || agentEntry.name.startsWith('.')) continue;
+            const agentDir = path.join(agentsDir, agentEntry.name);
+            const runtimePath = path.join(agentDir, 'runtime.json');
+            if (fs.existsSync(runtimePath)) {
+              const runtimeMeta = JSON.parse(fs.readFileSync(runtimePath, 'utf-8'));
+              packages.push({
+                id: `runtime:${agentEntry.name}`,
+                kind: 'runtime',
+                name: agentEntry.name,
+                version: runtimeMeta.version || 'unknown',
+                description: `${agentEntry.name} agent`,
+                category: 'agent',
+                installedAt: runtimeMeta.installedAt,
+                path: agentDir
+              });
+            }
+          }
+        }
+        continue;
+      }
+
       const pkgDir = path.join(dir, entry.name);
 
       // Check for manifest.json (stacks, prompts) or runtime.json (runtimes)
