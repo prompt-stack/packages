@@ -101,12 +101,51 @@ async function installSinglePackage(pkg, options = {}) {
     return { success: true, id: pkg.id, path: installPath, skipped: true };
   }
 
-  // Handle runtimes - download from GitHub releases
+  // Handle runtimes - download from GitHub releases or install via npm
   if (pkg.kind === 'runtime') {
     const runtimeName = pkg.id.replace('runtime:', '');
-    const version = pkg.version?.replace(/\.x$/, '.0') || '1.0.0'; // Convert 3.12.x -> 3.12.0
 
     onProgress?.({ phase: 'downloading', package: pkg.id });
+
+    // Handle npm-based agents (claude, codex, gemini)
+    if (pkg.npmPackage) {
+      try {
+        const { execSync } = await import('child_process');
+
+        if (!fs.existsSync(installPath)) {
+          fs.mkdirSync(installPath, { recursive: true });
+        }
+
+        onProgress?.({ phase: 'installing', package: pkg.id, message: `npm install ${pkg.npmPackage}` });
+
+        // Initialize package.json if needed
+        if (!fs.existsSync(path.join(installPath, 'package.json'))) {
+          execSync('npm init -y', { cwd: installPath, stdio: 'pipe' });
+        }
+
+        // Install the npm package
+        execSync(`npm install ${pkg.npmPackage}`, { cwd: installPath, stdio: 'pipe' });
+
+        // Write runtime metadata
+        fs.writeFileSync(
+          path.join(installPath, 'runtime.json'),
+          JSON.stringify({
+            runtime: runtimeName,
+            version: pkg.version || 'latest',
+            npmPackage: pkg.npmPackage,
+            installedAt: new Date().toISOString(),
+            source: 'npm'
+          }, null, 2)
+        );
+
+        return { success: true, id: pkg.id, path: installPath };
+      } catch (error) {
+        throw new Error(`Failed to install ${pkg.npmPackage}: ${error.message}`);
+      }
+    }
+
+    // Handle binary runtimes - download from GitHub releases
+    const version = pkg.version?.replace(/\.x$/, '.0') || '1.0.0';
 
     try {
       await downloadRuntime(runtimeName, version, installPath, {
