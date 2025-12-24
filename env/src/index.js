@@ -211,6 +211,11 @@ export function createPackageId(kind, name) {
 }
 
 /**
+ * Known agents that live in runtimes/agents/ subdirectory
+ */
+const AGENT_RUNTIMES = ['claude', 'codex', 'gemini', 'copilot', 'aider'];
+
+/**
  * Get path for an installed package
  * @param {string} id - Package ID (e.g., 'stack:pdf-creator')
  * @returns {string} Install path
@@ -224,6 +229,10 @@ export function getPackagePath(id) {
     case 'prompt':
       return path.join(PATHS.prompts, name);
     case 'runtime':
+      // Agents go in agents/ subdirectory for organization
+      if (AGENT_RUNTIMES.includes(name)) {
+        return path.join(PATHS.runtimes, 'agents', name);
+      }
       return path.join(PATHS.runtimes, name);
     default:
       throw new Error(`Unknown package kind: ${kind}`);
