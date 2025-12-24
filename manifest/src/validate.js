@@ -221,7 +221,7 @@ export function validateManifest(manifest) {
   // Detect kind from id prefix or explicit kind field
   let kind = manifest.kind;
   if (!kind && manifest.id) {
-    const match = manifest.id.match(/^(stack|prompt|runtime):/);
+    const match = manifest.id.match(/^(stack|prompt|runtime|tool|agent):/);
     kind = match ? match[1] : null;
   }
 

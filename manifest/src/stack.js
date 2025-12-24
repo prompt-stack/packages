@@ -259,20 +259,20 @@ export function findStackManifest(dir) {
 
 /**
  * Get the short ID from a full ID
- * @param {string} id - Full ID (e.g., 'stack:pdf-creator')
+ * @param {string} id - Full ID (e.g., 'stack:pdf-creator', 'tool:ffmpeg', 'agent:claude')
  * @returns {string} Short ID (e.g., 'pdf-creator')
  */
 export function getShortId(id) {
-  const match = id.match(/^(?:stack|prompt|runtime):(.+)$/);
+  const match = id.match(/^(?:stack|prompt|runtime|tool|agent):(.+)$/);
   return match ? match[1] : id;
 }
 
 /**
  * Get the kind from a full ID
  * @param {string} id - Full ID
- * @returns {'stack'|'prompt'|'runtime'|null}
+ * @returns {'stack'|'prompt'|'runtime'|'tool'|'agent'|null}
  */
 export function getKindFromId(id) {
-  const match = id.match(/^(stack|prompt|runtime):/);
+  const match = id.match(/^(stack|prompt|runtime|tool|agent):/);
   return match ? match[1] : null;
 }

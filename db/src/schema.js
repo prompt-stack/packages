@@ -187,13 +187,13 @@ CREATE INDEX IF NOT EXISTS idx_model_pricing_provider ON model_pricing(provider)
 CREATE INDEX IF NOT EXISTS idx_model_pricing_pattern ON model_pricing(model_pattern);
 
 -- =============================================================================
--- PACKAGES (stacks, prompts, runtimes)
+-- PACKAGES (stacks, prompts, runtimes, tools, agents)
 -- =============================================================================
 
 -- Installed packages
 CREATE TABLE IF NOT EXISTS packages (
-  id TEXT PRIMARY KEY,              -- e.g., 'stack:pdf-creator'
-  kind TEXT NOT NULL CHECK (kind IN ('stack', 'prompt', 'runtime')),
+  id TEXT PRIMARY KEY,              -- e.g., 'stack:pdf-creator', 'tool:ffmpeg', 'agent:claude'
+  kind TEXT NOT NULL CHECK (kind IN ('stack', 'prompt', 'runtime', 'tool', 'agent')),
   name TEXT NOT NULL,
   version TEXT NOT NULL,
   description TEXT,
@@ -377,7 +377,7 @@ function runMigrations(db, from, to) {
       db.exec(`
         CREATE TABLE IF NOT EXISTS packages (
           id TEXT PRIMARY KEY,
-          kind TEXT NOT NULL CHECK (kind IN ('stack', 'prompt', 'runtime')),
+          kind TEXT NOT NULL CHECK (kind IN ('stack', 'prompt', 'runtime', 'tool', 'agent')),
           name TEXT NOT NULL,
           version TEXT NOT NULL,
           description TEXT,

@@ -101,9 +101,9 @@ async function installSinglePackage(pkg, options = {}) {
     return { success: true, id: pkg.id, path: installPath, skipped: true };
   }
 
-  // Handle runtimes - download from GitHub releases or install via npm
-  if (pkg.kind === 'runtime') {
-    const runtimeName = pkg.id.replace('runtime:', '');
+  // Handle runtimes, tools, agents - download from GitHub releases or install via npm
+  if (pkg.kind === 'runtime' || pkg.kind === 'tool' || pkg.kind === 'agent') {
+    const pkgName = pkg.id.replace(/^(runtime|tool|agent):/, '');
 
     onProgress?.({ phase: 'downloading', package: pkg.id });
 
@@ -126,11 +126,13 @@ async function installSinglePackage(pkg, options = {}) {
         // Install the npm package
         execSync(`npm install ${pkg.npmPackage}`, { cwd: installPath, stdio: 'pipe' });
 
-        // Write runtime metadata
+        // Write package metadata
         fs.writeFileSync(
-          path.join(installPath, 'runtime.json'),
+          path.join(installPath, 'manifest.json'),
           JSON.stringify({
-            runtime: runtimeName,
+            id: pkg.id,
+            kind: pkg.kind,
+            name: pkgName,
             version: pkg.version || 'latest',
             npmPackage: pkg.npmPackage,
             installedAt: new Date().toISOString(),
@@ -161,11 +163,13 @@ async function installSinglePackage(pkg, options = {}) {
         // Install the pip package in the venv
         execSync(`"${installPath}/venv/bin/pip" install ${pkg.pipPackage}`, { stdio: 'pipe' });
 
-        // Write runtime metadata
+        // Write package metadata
         fs.writeFileSync(
-          path.join(installPath, 'runtime.json'),
+          path.join(installPath, 'manifest.json'),
           JSON.stringify({
-            runtime: runtimeName,
+            id: pkg.id,
+            kind: pkg.kind,
+            name: pkgName,
             version: pkg.version || 'latest',
             pipPackage: pkg.pipPackage,
             installedAt: new Date().toISOString(),
@@ -180,17 +184,17 @@ async function installSinglePackage(pkg, options = {}) {
       }
     }
 
-    // Handle binary runtimes - download from GitHub releases
+    // Handle binary packages (runtimes and tools) - download from GitHub releases
     const version = pkg.version?.replace(/\.x$/, '.0') || '1.0.0';
 
     try {
-      await downloadRuntime(runtimeName, version, installPath, {
+      await downloadRuntime(pkgName, version, installPath, {
         onProgress: (p) => onProgress?.({ ...p, package: pkg.id })
       });
       return { success: true, id: pkg.id, path: installPath };
     } catch (error) {
       // If download fails, create placeholder (for development/testing)
-      console.warn(`Runtime download failed: ${error.message}`);
+      console.warn(`Package download failed: ${error.message}`);
       console.warn(`Creating placeholder for ${pkg.id}`);
 
       if (!fs.existsSync(installPath)) {
@@ -200,7 +204,7 @@ async function installSinglePackage(pkg, options = {}) {
         path.join(installPath, 'manifest.json'),
         JSON.stringify({
           id: pkg.id,
-          kind: 'runtime',
+          kind: pkg.kind,
           name: pkg.name,
           version: pkg.version,
           installedAt: new Date().toISOString(),
@@ -370,73 +374,48 @@ async function copyDirectory(src, dest) {
 
 /**
  * List all installed packages
- * @param {'stack' | 'prompt' | 'runtime'} [kind] - Filter by kind
+ * @param {'stack' | 'prompt' | 'runtime' | 'tool' | 'agent'} [kind] - Filter by kind
  * @returns {Promise<Array>}
  */
 export async function listInstalled(kind) {
-  const kinds = kind ? [kind] : ['stack', 'prompt', 'runtime'];
+  const kinds = kind ? [kind] : ['stack', 'prompt', 'runtime', 'tool', 'agent'];
   const packages = [];
 
   for (const k of kinds) {
     const dir = {
       stack: PATHS.stacks,
       prompt: PATHS.prompts,
-      runtime: PATHS.runtimes
+      runtime: PATHS.runtimes,
+      tool: PATHS.tools,
+      agent: PATHS.agents
     }[k];
 
-    if (!fs.existsSync(dir)) continue;
+    if (!dir || !fs.existsSync(dir)) continue;
 
     const entries = fs.readdirSync(dir, { withFileTypes: true });
 
     for (const entry of entries) {
       if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
 
-      // For runtimes, also scan agents/ subdirectory
-      if (k === 'runtime' && entry.name === 'agents') {
-        const agentsDir = path.join(dir, 'agents');
-        if (fs.existsSync(agentsDir)) {
-          const agentEntries = fs.readdirSync(agentsDir, { withFileTypes: true });
-          for (const agentEntry of agentEntries) {
-            if (!agentEntry.isDirectory() || agentEntry.name.startsWith('.')) continue;
-            const agentDir = path.join(agentsDir, agentEntry.name);
-            const runtimePath = path.join(agentDir, 'runtime.json');
-            if (fs.existsSync(runtimePath)) {
-              const runtimeMeta = JSON.parse(fs.readFileSync(runtimePath, 'utf-8'));
-              packages.push({
-                id: `runtime:${agentEntry.name}`,
-                kind: 'runtime',
-                name: agentEntry.name,
-                version: runtimeMeta.version || 'unknown',
-                description: `${agentEntry.name} agent`,
-                category: 'agent',
-                installedAt: runtimeMeta.installedAt,
-                path: agentDir
-              });
-            }
-          }
-        }
-        continue;
-      }
-
       const pkgDir = path.join(dir, entry.name);
 
-      // Check for manifest.json (stacks, prompts) or runtime.json (runtimes)
+      // Check for manifest.json or runtime.json
       const manifestPath = path.join(pkgDir, 'manifest.json');
       const runtimePath = path.join(pkgDir, 'runtime.json');
 
       if (fs.existsSync(manifestPath)) {
         const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
-        packages.push(manifest);
-      } else if (k === 'runtime' && fs.existsSync(runtimePath)) {
-        // Runtime installed by Studio/pstack - has runtime.json
+        packages.push({ ...manifest, kind: k, path: pkgDir });
+      } else if (fs.existsSync(runtimePath)) {
+        // Older format - has runtime.json
         const runtimeMeta = JSON.parse(fs.readFileSync(runtimePath, 'utf-8'));
         packages.push({
-          id: `runtime:${entry.name}`,
-          kind: 'runtime',
+          id: `${k}:${entry.name}`,
+          kind: k,
           name: entry.name,
           version: runtimeMeta.version || 'unknown',
-          description: `${entry.name} runtime`,
-          installedAt: runtimeMeta.downloadedAt,
+          description: `${entry.name} ${k}`,
+          installedAt: runtimeMeta.downloadedAt || runtimeMeta.installedAt,
           path: pkgDir
         });
       }

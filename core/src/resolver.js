@@ -70,6 +70,42 @@ async function resolveDependencies(pkg) {
     }
   }
 
+  // Resolve tool dependencies
+  const tools = pkg.requires?.tools || [];
+  for (const tool of tools) {
+    const toolId = tool.startsWith('tool:') ? tool : `tool:${tool}`;
+    const toolPkg = await getPackage(toolId);
+
+    if (toolPkg) {
+      dependencies.push({
+        id: toolId,
+        kind: 'tool',
+        name: toolPkg.name,
+        version: toolPkg.version,
+        installed: isPackageInstalled(toolId),
+        dependencies: []
+      });
+    }
+  }
+
+  // Resolve agent dependencies
+  const agents = pkg.requires?.agents || [];
+  for (const agent of agents) {
+    const agentId = agent.startsWith('agent:') ? agent : `agent:${agent}`;
+    const agentPkg = await getPackage(agentId);
+
+    if (agentPkg) {
+      dependencies.push({
+        id: agentId,
+        kind: 'agent',
+        name: agentPkg.name,
+        version: agentPkg.version,
+        installed: isPackageInstalled(agentId),
+        dependencies: []
+      });
+    }
+  }
+
   return dependencies;
 }
 

@@ -30,8 +30,14 @@ export const PATHS = {
   stacks: path.join(PROMPT_STACK_HOME, 'stacks'),     // Shared with Studio
   prompts: path.join(PROMPT_STACK_HOME, 'prompts'),   // Shared with Studio
 
-  // Runtimes - shared with Studio
+  // Runtimes (interpreters: node, python, deno, bun)
   runtimes: path.join(PROMPT_STACK_HOME, 'runtimes'),
+
+  // Tools (utility binaries: ffmpeg, imagemagick, ripgrep, etc.)
+  tools: path.join(PROMPT_STACK_HOME, 'tools'),
+
+  // Agents (AI CLI tools: claude, codex, gemini, copilot, ollama)
+  agents: path.join(PROMPT_STACK_HOME, 'agents'),
 
   // Runtime binaries (content-addressed)
   store: path.join(PROMPT_STACK_HOME, 'store'),
@@ -159,6 +165,8 @@ export function ensureDirectories() {
     PATHS.stacks,
     PATHS.prompts,
     PATHS.runtimes,
+    PATHS.tools,
+    PATHS.agents,
     PATHS.store,
     PATHS.bins,
     PATHS.locks,
@@ -188,14 +196,19 @@ export function areDirectoriesInitialized() {
 // =============================================================================
 
 /**
+ * All valid package kinds
+ */
+export const PACKAGE_KINDS = ['stack', 'prompt', 'runtime', 'tool', 'agent'];
+
+/**
  * Parse a package ID into kind and name
- * @param {string} id - Package ID (e.g., 'stack:pdf-creator')
+ * @param {string} id - Package ID (e.g., 'stack:pdf-creator', 'tool:ffmpeg', 'agent:claude')
  * @returns {[string, string]} [kind, name]
  */
 export function parsePackageId(id) {
-  const match = id.match(/^(stack|prompt|runtime):(.+)$/);
+  const match = id.match(/^(stack|prompt|runtime|tool|agent):(.+)$/);
   if (!match) {
-    throw new Error(`Invalid package ID: ${id} (expected format: kind:name)`);
+    throw new Error(`Invalid package ID: ${id} (expected format: kind:name, where kind is one of: ${PACKAGE_KINDS.join(', ')})`);
   }
   return [match[1], match[2]];
 }
@@ -211,13 +224,8 @@ export function createPackageId(kind, name) {
 }
 
 /**
- * Known agents that live in runtimes/agents/ subdirectory
- */
-const AGENT_RUNTIMES = ['claude', 'codex', 'gemini', 'copilot', 'aider'];
-
-/**
  * Get path for an installed package
- * @param {string} id - Package ID (e.g., 'stack:pdf-creator')
+ * @param {string} id - Package ID (e.g., 'stack:pdf-creator', 'tool:ffmpeg', 'agent:claude')
  * @returns {string} Install path
  */
 export function getPackagePath(id) {
@@ -229,11 +237,11 @@ export function getPackagePath(id) {
     case 'prompt':
       return path.join(PATHS.prompts, name);
     case 'runtime':
-      // Agents go in agents/ subdirectory for organization
-      if (AGENT_RUNTIMES.includes(name)) {
-        return path.join(PATHS.runtimes, 'agents', name);
-      }
       return path.join(PATHS.runtimes, name);
+    case 'tool':
+      return path.join(PATHS.tools, name);
+    case 'agent':
+      return path.join(PATHS.agents, name);
     default:
       throw new Error(`Unknown package kind: ${kind}`);
   }
@@ -281,17 +289,19 @@ export function isPackageInstalled(id) {
 
 /**
  * Get list of installed packages by kind
- * @param {'stack' | 'prompt' | 'runtime'} kind
+ * @param {'stack' | 'prompt' | 'runtime' | 'tool' | 'agent'} kind
  * @returns {string[]} Package names
  */
 export function getInstalledPackages(kind) {
   const dir = {
     stack: PATHS.stacks,
     prompt: PATHS.prompts,
-    runtime: PATHS.runtimes
+    runtime: PATHS.runtimes,
+    tool: PATHS.tools,
+    agent: PATHS.agents
   }[kind];
 
-  if (!fs.existsSync(dir)) {
+  if (!dir || !fs.existsSync(dir)) {
     return [];
   }
 

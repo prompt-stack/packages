@@ -216,6 +216,11 @@ export function checkCache() {
 // =============================================================================
 
 /**
+ * All valid package kinds
+ */
+export const PACKAGE_KINDS = ['stack', 'prompt', 'runtime', 'tool', 'agent'];
+
+/**
  * Search packages in the registry
  * @param {string} query - Search query
  * @param {Object} options
@@ -229,7 +234,7 @@ export async function searchPackages(query, options = {}) {
   const results = [];
   const queryLower = query.toLowerCase();
 
-  const kinds = kind ? [kind] : ['stack', 'prompt', 'runtime'];
+  const kinds = kind ? [kind] : PACKAGE_KINDS;
 
   for (const k of kinds) {
     const section = index.packages?.[k + 's'];
@@ -263,14 +268,14 @@ function matchesQuery(pkg, query) {
 
 /**
  * Get a specific package from the registry
- * @param {string} id - Package ID (e.g., 'stack:pdf-creator')
+ * @param {string} id - Package ID (e.g., 'stack:pdf-creator', 'tool:ffmpeg', 'agent:claude')
  * @returns {Promise<Object|null>}
  */
 export async function getPackage(id) {
   const index = await fetchIndex();
   const [kind, name] = id.includes(':') ? id.split(':') : [null, id];
 
-  const kinds = kind ? [kind] : ['stack', 'prompt', 'runtime'];
+  const kinds = kind ? [kind] : PACKAGE_KINDS;
 
   for (const k of kinds) {
     const section = index.packages?.[k + 's'];
@@ -279,7 +284,8 @@ export async function getPackage(id) {
     const packages = [...(section.official || []), ...(section.community || [])];
 
     for (const pkg of packages) {
-      const pkgShortId = pkg.id?.replace(/^(stack|prompt|runtime):/, '') || '';
+      const kindPrefixPattern = new RegExp(`^(${PACKAGE_KINDS.join('|')}):`);
+      const pkgShortId = pkg.id?.replace(kindPrefixPattern, '') || '';
       if (pkgShortId === name || pkg.id === id) {
         return { ...pkg, kind: k };
       }
@@ -291,7 +297,7 @@ export async function getPackage(id) {
 
 /**
  * List all packages of a specific kind
- * @param {'stack' | 'prompt' | 'runtime'} kind
+ * @param {'stack' | 'prompt' | 'runtime' | 'tool' | 'agent'} kind
  * @returns {Promise<Array>}
  */
 export async function listPackages(kind) {
@@ -299,6 +305,14 @@ export async function listPackages(kind) {
   const section = index.packages?.[kind + 's'];
   if (!section) return [];
   return [...(section.official || []), ...(section.community || [])];
+}
+
+/**
+ * List all available package kinds
+ * @returns {string[]}
+ */
+export function getPackageKinds() {
+  return PACKAGE_KINDS;
 }
 
 // =============================================================================
