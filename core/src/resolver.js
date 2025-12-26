@@ -41,7 +41,12 @@ export async function resolvePackage(id) {
     entry: pkg.entry,
     installed,
     dependencies,
-    requires: pkg.requires
+    requires: pkg.requires,
+    // Install-related properties
+    npmPackage: pkg.npmPackage,
+    pipPackage: pkg.pipPackage,
+    binary: pkg.binary,
+    installDir: pkg.installDir
   };
 }
 

@@ -51,9 +51,9 @@ export const PATHS = {
   // Secrets (OS Keychain preferred, encrypted file fallback)
   vault: path.join(PROMPT_STACK_HOME, 'vault'),
 
-  // Database
-  db: path.join(PROMPT_STACK_HOME, 'db'),
-  dbFile: path.join(PROMPT_STACK_HOME, 'db', 'pstack.db'),
+  // Database (shared with Studio)
+  db: PROMPT_STACK_HOME,
+  dbFile: path.join(PROMPT_STACK_HOME, 'prompt-stack.db'),
 
   // Cache
   cache: path.join(PROMPT_STACK_HOME, 'cache'),
