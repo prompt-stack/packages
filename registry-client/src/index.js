@@ -20,9 +20,9 @@ import { PATHS, getPlatformArch } from '@prompt-stack/env';
 export const DEFAULT_REGISTRY_URL = 'https://raw.githubusercontent.com/prompt-stack/registry/main/index.json';
 
 /**
- * Default runtimes download base URL
+ * Default downloads base URL (from registry repo releases)
  */
-export const RUNTIMES_DOWNLOAD_BASE = 'https://github.com/prompt-stack/runtimes/releases/download';
+export const RUNTIMES_DOWNLOAD_BASE = 'https://github.com/prompt-stack/registry/releases/download';
 
 /**
  * Cache TTL in milliseconds (24 hours)

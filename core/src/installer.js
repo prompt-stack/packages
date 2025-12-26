@@ -118,13 +118,20 @@ async function installSinglePackage(pkg, options = {}) {
 
         onProgress?.({ phase: 'installing', package: pkg.id, message: `npm install ${pkg.npmPackage}` });
 
+        // Use bundled Node's npm if RESOURCES_PATH is set (running from Studio)
+        // Otherwise fall back to system npm (CLI standalone use)
+        const resourcesPath = process.env.RESOURCES_PATH;
+        const npmCmd = resourcesPath
+          ? path.join(resourcesPath, 'bundled-runtimes', 'node', 'bin', 'npm')
+          : 'npm';
+
         // Initialize package.json if needed
         if (!fs.existsSync(path.join(installPath, 'package.json'))) {
-          execSync('npm init -y', { cwd: installPath, stdio: 'pipe' });
+          execSync(`"${npmCmd}" init -y`, { cwd: installPath, stdio: 'pipe' });
         }
 
         // Install the npm package
-        execSync(`npm install ${pkg.npmPackage}`, { cwd: installPath, stdio: 'pipe' });
+        execSync(`"${npmCmd}" install ${pkg.npmPackage}`, { cwd: installPath, stdio: 'pipe' });
 
         // Write package metadata
         fs.writeFileSync(
@@ -157,8 +164,13 @@ async function installSinglePackage(pkg, options = {}) {
 
         onProgress?.({ phase: 'installing', package: pkg.id, message: `pip install ${pkg.pipPackage}` });
 
+        // Use downloaded Python from ~/.prompt-stack/runtimes/python/ if available
+        // Otherwise fall back to system python3
+        const pythonPath = path.join(PATHS.runtimes, 'python', 'bin', 'python3');
+        const pythonCmd = fs.existsSync(pythonPath) ? pythonPath : 'python3';
+
         // Create a virtual environment
-        execSync(`python3 -m venv "${installPath}/venv"`, { stdio: 'pipe' });
+        execSync(`"${pythonCmd}" -m venv "${installPath}/venv"`, { stdio: 'pipe' });
 
         // Install the pip package in the venv
         execSync(`"${installPath}/venv/bin/pip" install ${pkg.pipPackage}`, { stdio: 'pipe' });
