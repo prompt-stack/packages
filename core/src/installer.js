@@ -234,22 +234,26 @@ async function installSinglePackage(pkg, options = {}) {
     try {
       await downloadPackage(pkg, installPath, { onProgress });
 
-      // Write manifest
-      fs.writeFileSync(
-        path.join(installPath, 'manifest.json'),
-        JSON.stringify({
-          id: pkg.id,
-          kind: pkg.kind,
-          name: pkg.name,
-          version: pkg.version,
-          description: pkg.description,
-          runtime: pkg.runtime,
-          entry: pkg.entry || 'create_pdf.py',  // default entry point
-          requires: pkg.requires,
-          installedAt: new Date().toISOString(),
-          source: 'registry'
-        }, null, 2)
-      );
+      // Only write manifest.json if one wasn't downloaded from registry
+      const manifestPath = path.join(installPath, 'manifest.json');
+      if (!fs.existsSync(manifestPath)) {
+        // Write minimal manifest as fallback
+        fs.writeFileSync(
+          manifestPath,
+          JSON.stringify({
+            id: pkg.id,
+            kind: pkg.kind,
+            name: pkg.name,
+            version: pkg.version,
+            description: pkg.description,
+            runtime: pkg.runtime,
+            entry: pkg.entry || 'create_pdf.py',  // default entry point
+            requires: pkg.requires,
+            installedAt: new Date().toISOString(),
+            source: 'registry'
+          }, null, 2)
+        );
+      }
 
       onProgress?.({ phase: 'installed', package: pkg.id });
       return { success: true, id: pkg.id, path: installPath };

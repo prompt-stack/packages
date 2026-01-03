@@ -284,7 +284,27 @@ export function getShimPath(command) {
  */
 export function isPackageInstalled(id) {
   const packagePath = getPackagePath(id);
-  return fs.existsSync(packagePath);
+
+  // Check if folder exists
+  if (!fs.existsSync(packagePath)) {
+    return false;
+  }
+
+  // For agents (npm packages), check if node_modules/.bin exists
+  // An empty folder means a failed/incomplete install
+  const [kind, name] = parsePackageId(id);
+  if (kind === 'agent') {
+    const binPath = path.join(packagePath, 'node_modules', '.bin', name);
+    return fs.existsSync(binPath);
+  }
+
+  // For other package types, just check folder is non-empty
+  try {
+    const contents = fs.readdirSync(packagePath);
+    return contents.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 /**
