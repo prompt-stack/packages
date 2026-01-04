@@ -45,6 +45,7 @@ export async function resolvePackage(id) {
     // Install-related properties
     npmPackage: pkg.npmPackage,
     pipPackage: pkg.pipPackage,
+    postInstall: pkg.postInstall,
     binary: pkg.binary,
     installDir: pkg.installDir
   };

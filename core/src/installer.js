@@ -133,6 +133,17 @@ async function installSinglePackage(pkg, options = {}) {
         // Install the npm package
         execSync(`"${npmCmd}" install ${pkg.npmPackage}`, { cwd: installPath, stdio: 'pipe' });
 
+        // Run postInstall if specified
+        if (pkg.postInstall) {
+          onProgress?.({ phase: 'postInstall', package: pkg.id, message: pkg.postInstall });
+          // Replace 'npx <cmd>' with direct node_modules/.bin/<cmd> path for reliability
+          const postInstallCmd = pkg.postInstall.replace(
+            /^npx\s+(\S+)/,
+            `"${path.join(installPath, 'node_modules', '.bin', '$1')}"`
+          );
+          execSync(postInstallCmd, { cwd: installPath, stdio: 'pipe' });
+        }
+
         // Write package metadata
         fs.writeFileSync(
           path.join(installPath, 'manifest.json'),
@@ -142,6 +153,7 @@ async function installSinglePackage(pkg, options = {}) {
             name: pkgName,
             version: pkg.version || 'latest',
             npmPackage: pkg.npmPackage,
+            postInstall: pkg.postInstall,
             installedAt: new Date().toISOString(),
             source: 'npm'
           }, null, 2)
