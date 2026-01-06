@@ -235,7 +235,8 @@ export function getPackagePath(id) {
     case 'stack':
       return path.join(PATHS.stacks, name);
     case 'prompt':
-      return path.join(PATHS.prompts, name);
+      // Prompts are single .md files, not directories
+      return path.join(PATHS.prompts, `${name}.md`);
     case 'runtime':
       return path.join(PATHS.runtimes, name);
     case 'tool':
@@ -284,6 +285,12 @@ export function getShimPath(command) {
  */
 export function isPackageInstalled(id) {
   const packagePath = getPackagePath(id);
+  const [kind, name] = parsePackageId(id);
+
+  // Prompts are single .md files
+  if (kind === 'prompt') {
+    return fs.existsSync(packagePath) && fs.statSync(packagePath).isFile();
+  }
 
   // Check if folder exists
   if (!fs.existsSync(packagePath)) {
@@ -292,7 +299,6 @@ export function isPackageInstalled(id) {
 
   // For agents (npm packages), check if node_modules/.bin exists
   // An empty folder means a failed/incomplete install
-  const [kind, name] = parsePackageId(id);
   if (kind === 'agent') {
     const binPath = path.join(packagePath, 'node_modules', '.bin', name);
     return fs.existsSync(binPath);
@@ -325,6 +331,16 @@ export function getInstalledPackages(kind) {
     return [];
   }
 
+  // Prompts are .md files, not directories
+  if (kind === 'prompt') {
+    return fs.readdirSync(dir).filter(name => {
+      if (!name.endsWith('.md') || name.startsWith('.')) return false;
+      const stat = fs.statSync(path.join(dir, name));
+      return stat.isFile();
+    }).map(name => name.replace(/\.md$/, '')); // Return name without extension
+  }
+
+  // Other packages are directories
   return fs.readdirSync(dir).filter(name => {
     const stat = fs.statSync(path.join(dir, name));
     return stat.isDirectory() && !name.startsWith('.');

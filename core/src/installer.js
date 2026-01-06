@@ -276,6 +276,12 @@ async function installSinglePackage(pkg, options = {}) {
             }, null, 2)
           );
         }
+
+        // Install dependencies for stacks with node or python runtime
+        if (pkg.kind === 'stack') {
+          onProgress?.({ phase: 'installing-deps', package: pkg.id });
+          await installStackDependencies(installPath, onProgress);
+        }
       }
 
       onProgress?.({ phase: 'installed', package: pkg.id });
@@ -574,4 +580,47 @@ export async function updateAll(options = {}) {
   }
 
   return results;
+}
+
+/**
+ * Install dependencies for a stack (npm install for node, pip install for python)
+ * @param {string} stackPath - Path to the installed stack
+ * @param {Function} [onProgress] - Progress callback
+ * @returns {Promise<void>}
+ */
+async function installStackDependencies(stackPath, onProgress) {
+  const { execSync } = await import('child_process');
+
+  // Check for node runtime
+  const nodePath = path.join(stackPath, 'node');
+  if (fs.existsSync(nodePath)) {
+    const packageJsonPath = path.join(nodePath, 'package.json');
+    if (fs.existsSync(packageJsonPath)) {
+      onProgress?.({ phase: 'installing-deps', message: 'Installing Node.js dependencies...' });
+      try {
+        // Use npm (should be available in PATH)
+        execSync('npm install', { cwd: nodePath, stdio: 'pipe' });
+      } catch (error) {
+        console.warn(`Warning: Failed to install Node.js dependencies: ${error.message}`);
+        // Don't fail installation if deps fail - stack may still work
+      }
+    }
+  }
+
+  // Check for python runtime
+  const pythonPath = path.join(stackPath, 'python');
+  if (fs.existsSync(pythonPath)) {
+    const requirementsPath = path.join(pythonPath, 'requirements.txt');
+    if (fs.existsSync(requirementsPath)) {
+      onProgress?.({ phase: 'installing-deps', message: 'Installing Python dependencies...' });
+      try {
+        // Create venv and install requirements
+        execSync('python3 -m venv venv', { cwd: pythonPath, stdio: 'pipe' });
+        execSync('./venv/bin/pip install -r requirements.txt', { cwd: pythonPath, stdio: 'pipe' });
+      } catch (error) {
+        console.warn(`Warning: Failed to install Python dependencies: ${error.message}`);
+        // Don't fail installation if deps fail - stack may still work
+      }
+    }
+  }
 }
