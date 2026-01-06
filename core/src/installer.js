@@ -9,7 +9,7 @@ import { pipeline } from 'stream/promises';
 import { createWriteStream } from 'fs';
 import { createGunzip } from 'zlib';
 import { PATHS, getPackagePath, ensureDirectories, parsePackageId } from '@prompt-stack/env';
-import { downloadRuntime, downloadPackage } from '@prompt-stack/registry-client';
+import { downloadRuntime, downloadPackage, downloadTool } from '@prompt-stack/registry-client';
 import { resolvePackage, getInstallOrder } from './resolver.js';
 import { writeLockfile } from './lockfile.js';
 
@@ -208,13 +208,21 @@ async function installSinglePackage(pkg, options = {}) {
       }
     }
 
-    // Handle binary packages (runtimes and tools) - download from GitHub releases
+    // Handle binary packages - tools use upstream URLs, runtimes use GitHub releases
     const version = pkg.version?.replace(/\.x$/, '.0') || '1.0.0';
 
     try {
-      await downloadRuntime(pkgName, version, installPath, {
-        onProgress: (p) => onProgress?.({ ...p, package: pkg.id })
-      });
+      if (pkg.kind === 'tool') {
+        // Tools: use upstream URLs from tool manifests (e.g., evermeet.cx for ffmpeg)
+        await downloadTool(pkgName, installPath, {
+          onProgress: (p) => onProgress?.({ ...p, package: pkg.id })
+        });
+      } else {
+        // Runtimes and agents: use GitHub releases
+        await downloadRuntime(pkgName, version, installPath, {
+          onProgress: (p) => onProgress?.({ ...p, package: pkg.id })
+        });
+      }
       return { success: true, id: pkg.id, path: installPath };
     } catch (error) {
       // If download fails, create placeholder (for development/testing)
@@ -246,25 +254,28 @@ async function installSinglePackage(pkg, options = {}) {
     try {
       await downloadPackage(pkg, installPath, { onProgress });
 
-      // Only write manifest.json if one wasn't downloaded from registry
-      const manifestPath = path.join(installPath, 'manifest.json');
-      if (!fs.existsSync(manifestPath)) {
-        // Write minimal manifest as fallback
-        fs.writeFileSync(
-          manifestPath,
-          JSON.stringify({
-            id: pkg.id,
-            kind: pkg.kind,
-            name: pkg.name,
-            version: pkg.version,
-            description: pkg.description,
-            runtime: pkg.runtime,
-            entry: pkg.entry || 'create_pdf.py',  // default entry point
-            requires: pkg.requires,
-            installedAt: new Date().toISOString(),
-            source: 'registry'
-          }, null, 2)
-        );
+      // Prompts are single .md files, no manifest.json needed
+      if (pkg.kind !== 'prompt') {
+        // Only write manifest.json if one wasn't downloaded from registry
+        const manifestPath = path.join(installPath, 'manifest.json');
+        if (!fs.existsSync(manifestPath)) {
+          // Write minimal manifest as fallback
+          fs.writeFileSync(
+            manifestPath,
+            JSON.stringify({
+              id: pkg.id,
+              kind: pkg.kind,
+              name: pkg.name,
+              version: pkg.version,
+              description: pkg.description,
+              runtime: pkg.runtime,
+              entry: pkg.entry || 'create_pdf.py',  // default entry point
+              requires: pkg.requires,
+              installedAt: new Date().toISOString(),
+              source: 'registry'
+            }, null, 2)
+          );
+        }
       }
 
       onProgress?.({ phase: 'installed', package: pkg.id });
@@ -275,6 +286,11 @@ async function installSinglePackage(pkg, options = {}) {
   }
 
   // Fallback: create placeholder
+  // For prompts, we can't create a placeholder - they must come from registry
+  if (pkg.kind === 'prompt') {
+    throw new Error(`Prompt ${pkg.id} not found in registry`);
+  }
+
   if (fs.existsSync(installPath)) {
     fs.rmSync(installPath, { recursive: true });
   }
@@ -307,16 +323,21 @@ async function installSinglePackage(pkg, options = {}) {
  */
 export async function uninstallPackage(id) {
   const installPath = getPackagePath(id);
+  const [kind, name] = parsePackageId(id);
 
   if (!fs.existsSync(installPath)) {
     return { success: false, error: `Package not installed: ${id}` };
   }
 
   try {
-    fs.rmSync(installPath, { recursive: true });
+    // Prompts are single files, not directories
+    if (kind === 'prompt') {
+      fs.unlinkSync(installPath);
+    } else {
+      fs.rmSync(installPath, { recursive: true });
+    }
 
     // Remove lockfile
-    const [kind, name] = parsePackageId(id);
     const lockPath = path.join(PATHS.locks, kind + 's', `${name}.lock.yaml`);
     if (fs.existsSync(lockPath)) {
       fs.unlinkSync(lockPath);
@@ -422,6 +443,74 @@ export async function listInstalled(kind) {
 
     const entries = fs.readdirSync(dir, { withFileTypes: true });
 
+    // Prompts are .md files, not directories
+    if (k === 'prompt') {
+      for (const entry of entries) {
+        if (!entry.isFile() || !entry.name.endsWith('.md') || entry.name.startsWith('.')) continue;
+
+        const filePath = path.join(dir, entry.name);
+        const name = entry.name.replace(/\.md$/, '');
+
+        // Read prompt file to extract frontmatter metadata
+        try {
+          const content = fs.readFileSync(filePath, 'utf-8');
+          const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+
+          let metadata = {};
+          if (frontmatterMatch) {
+            // Simple YAML parsing for common fields
+            const yaml = frontmatterMatch[1];
+            const nameMatch = yaml.match(/^name:\s*["']?(.+?)["']?\s*$/m);
+            const descMatch = yaml.match(/^description:\s*["']?(.+?)["']?\s*$/m);
+            const versionMatch = yaml.match(/^version:\s*["']?(.+?)["']?\s*$/m);
+            const categoryMatch = yaml.match(/^category:\s*["']?(.+?)["']?\s*$/m);
+            const iconMatch = yaml.match(/^icon:\s*["']?(.+?)["']?\s*$/m);
+
+            if (nameMatch) metadata.name = nameMatch[1];
+            if (descMatch) metadata.description = descMatch[1];
+            if (versionMatch) metadata.version = versionMatch[1];
+            if (categoryMatch) metadata.category = categoryMatch[1];
+            if (iconMatch) metadata.icon = iconMatch[1];
+
+            // Parse tags (YAML list format)
+            const tagsSection = yaml.match(/^tags:\s*\n((?:\s+-\s+.+\n?)+)/m);
+            if (tagsSection) {
+              metadata.tags = tagsSection[1]
+                .split('\n')
+                .map(line => line.replace(/^\s+-\s+/, '').trim())
+                .filter(Boolean);
+            }
+          }
+
+          packages.push({
+            id: `prompt:${name}`,
+            kind: 'prompt',
+            name: metadata.name || name,
+            version: metadata.version || '1.0.0',
+            description: metadata.description || `${name} prompt`,
+            category: metadata.category || 'general',
+            tags: metadata.tags || [],
+            icon: metadata.icon || '',
+            path: filePath
+          });
+        } catch {
+          // If we can't read the file, still list it
+          packages.push({
+            id: `prompt:${name}`,
+            kind: 'prompt',
+            name: name,
+            version: '1.0.0',
+            description: `${name} prompt`,
+            category: 'general',
+            tags: [],
+            path: filePath
+          });
+        }
+      }
+      continue;
+    }
+
+    // Other packages are directories
     for (const entry of entries) {
       if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
 

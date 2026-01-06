@@ -333,7 +333,7 @@ export async function downloadPackage(pkg, destPath, options = {}) {
   // For now, we handle catalog packages (local in registry)
   // In production, this would download tarballs
 
-  const registryPath = pkg.path; // e.g., 'catalog/stacks/official/pdf-creator'
+  const registryPath = pkg.path; // e.g., 'catalog/stacks/official/pdf-creator' or 'catalog/prompts/code-review.md'
 
   // Try to find local registry
   for (const basePath of LOCAL_REGISTRY_PATHS) {
@@ -341,8 +341,20 @@ export async function downloadPackage(pkg, destPath, options = {}) {
     const pkgSourcePath = path.join(registryDir, registryPath);
 
     if (fs.existsSync(pkgSourcePath)) {
-      // Copy from local registry
-      await copyDirectory(pkgSourcePath, destPath);
+      const stat = fs.statSync(pkgSourcePath);
+
+      if (stat.isFile()) {
+        // Handle single file packages (prompts are .md files)
+        // destPath for prompts is the full file path including filename
+        const destDir = path.dirname(destPath);
+        if (!fs.existsSync(destDir)) {
+          fs.mkdirSync(destDir, { recursive: true });
+        }
+        fs.copyFileSync(pkgSourcePath, destPath);
+      } else {
+        // Handle directory packages (stacks, tools, etc.)
+        await copyDirectory(pkgSourcePath, destPath);
+      }
       return { success: true, path: destPath };
     }
   }
@@ -440,6 +452,302 @@ export async function downloadRuntime(runtime, version, destPath, options = {}) 
     }
     throw new Error(`Failed to install ${runtime} ${version}: ${error.message}`);
   }
+}
+
+// =============================================================================
+// TOOL DOWNLOAD (using upstream URLs from manifests)
+// =============================================================================
+
+/**
+ * Download a tool binary using upstream URLs from the tool manifest
+ * @param {string} toolName - Tool name (e.g., 'ffmpeg', 'pandoc')
+ * @param {string} destPath - Destination path
+ * @param {Object} options
+ * @param {Function} [options.onProgress] - Progress callback
+ * @returns {Promise<{ success: boolean, path: string }>}
+ */
+export async function downloadTool(toolName, destPath, options = {}) {
+  const { onProgress } = options;
+  const platformArch = getPlatformArch();
+
+  // Load the tool manifest from the registry
+  const toolManifest = await loadToolManifest(toolName);
+  if (!toolManifest) {
+    throw new Error(`Tool manifest not found for: ${toolName}`);
+  }
+
+  // Create temp directory for download
+  const tempDir = path.join(PATHS.cache, 'downloads');
+  if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir, { recursive: true });
+  }
+
+  // Create destination directory
+  if (fs.existsSync(destPath)) {
+    fs.rmSync(destPath, { recursive: true });
+  }
+  fs.mkdirSync(destPath, { recursive: true });
+
+  const { execSync } = await import('child_process');
+
+  // Check for new multi-download format first
+  const downloads = toolManifest.downloads?.[platformArch];
+
+  if (downloads && Array.isArray(downloads)) {
+    // New format: multiple downloads per platform
+    const downloadedUrls = new Set(); // Track to avoid re-downloading same archive
+
+    for (const download of downloads) {
+      const { url, type, binary } = download;
+
+      // Skip if we already downloaded this URL (e.g., Linux tar.xz has both ffmpeg and ffprobe)
+      if (downloadedUrls.has(url)) {
+        // Just extract the binary from already-extracted content
+        await extractBinaryFromPath(destPath, binary, destPath);
+        continue;
+      }
+
+      onProgress?.({ phase: 'downloading', tool: toolName, binary: path.basename(binary), url });
+
+      const urlFilename = path.basename(new URL(url).pathname);
+      const tempFile = path.join(tempDir, urlFilename);
+
+      try {
+        // Download the archive
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'pstack-cli/2.0',
+            'Accept': 'application/octet-stream'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to download ${binary}: HTTP ${response.status}`);
+        }
+
+        const buffer = await response.arrayBuffer();
+        fs.writeFileSync(tempFile, Buffer.from(buffer));
+        downloadedUrls.add(url);
+
+        onProgress?.({ phase: 'extracting', tool: toolName, binary: path.basename(binary) });
+
+        // Extract based on archive type
+        const archiveType = type || guessArchiveType(urlFilename);
+
+        if (archiveType === 'zip') {
+          execSync(`unzip -o "${tempFile}" -d "${destPath}"`, { stdio: 'pipe' });
+        } else if (archiveType === 'tar.xz') {
+          execSync(`tar -xJf "${tempFile}" -C "${destPath}"`, { stdio: 'pipe' });
+        } else if (archiveType === 'tar.gz' || archiveType === 'tgz') {
+          execSync(`tar -xzf "${tempFile}" -C "${destPath}"`, { stdio: 'pipe' });
+        } else {
+          throw new Error(`Unsupported archive type: ${archiveType}`);
+        }
+
+        // Extract/move the specific binary to dest root
+        await extractBinaryFromPath(destPath, binary, destPath);
+
+        // Clean up temp file
+        fs.unlinkSync(tempFile);
+
+      } catch (error) {
+        if (fs.existsSync(tempFile)) {
+          fs.unlinkSync(tempFile);
+        }
+        throw error;
+      }
+    }
+
+    // Make all binaries executable
+    const binaries = toolManifest.binaries || [toolName];
+    for (const bin of binaries) {
+      const binPath = path.join(destPath, bin);
+      if (fs.existsSync(binPath)) {
+        fs.chmodSync(binPath, 0o755);
+      }
+    }
+
+  } else {
+    // Legacy format: single upstream URL per platform
+    const upstreamUrl = toolManifest.upstream?.[platformArch];
+    if (!upstreamUrl) {
+      throw new Error(`No upstream URL for ${toolName} on ${platformArch}`);
+    }
+
+    const extractConfig = toolManifest.extract?.[platformArch];
+    if (!extractConfig) {
+      throw new Error(`No extract config for ${toolName} on ${platformArch}`);
+    }
+
+    onProgress?.({ phase: 'downloading', tool: toolName, url: upstreamUrl });
+
+    const urlFilename = path.basename(new URL(upstreamUrl).pathname);
+    const tempFile = path.join(tempDir, urlFilename);
+
+    try {
+      const response = await fetch(upstreamUrl, {
+        headers: {
+          'User-Agent': 'pstack-cli/2.0',
+          'Accept': 'application/octet-stream'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to download ${toolName}: HTTP ${response.status}`);
+      }
+
+      const buffer = await response.arrayBuffer();
+      fs.writeFileSync(tempFile, Buffer.from(buffer));
+
+      onProgress?.({ phase: 'extracting', tool: toolName });
+
+      const archiveType = extractConfig.type || guessArchiveType(urlFilename);
+
+      if (archiveType === 'zip') {
+        execSync(`unzip -o "${tempFile}" -d "${destPath}"`, { stdio: 'pipe' });
+      } else if (archiveType === 'tar.xz') {
+        execSync(`tar -xJf "${tempFile}" -C "${destPath}"`, { stdio: 'pipe' });
+      } else if (archiveType === 'tar.gz' || archiveType === 'tgz') {
+        execSync(`tar -xzf "${tempFile}" -C "${destPath}"`, { stdio: 'pipe' });
+      } else {
+        throw new Error(`Unsupported archive type: ${archiveType}`);
+      }
+
+      // Extract the binary
+      await extractBinaryFromPath(destPath, extractConfig.binary || toolName, destPath);
+
+      // Make binaries executable
+      const binaries = [toolName, ...(toolManifest.additionalBinaries || [])];
+      for (const bin of binaries) {
+        const binPath = path.join(destPath, bin);
+        if (fs.existsSync(binPath)) {
+          fs.chmodSync(binPath, 0o755);
+        }
+      }
+
+      fs.unlinkSync(tempFile);
+
+    } catch (error) {
+      if (fs.existsSync(tempFile)) {
+        fs.unlinkSync(tempFile);
+      }
+      throw new Error(`Failed to install ${toolName}: ${error.message}`);
+    }
+  }
+
+  // Write tool metadata
+  fs.writeFileSync(
+    path.join(destPath, 'manifest.json'),
+    JSON.stringify({
+      id: `tool:${toolName}`,
+      kind: 'tool',
+      name: toolManifest.name || toolName,
+      version: toolManifest.version,
+      binaries: toolManifest.binaries || [toolName],
+      platformArch,
+      installedAt: new Date().toISOString()
+    }, null, 2)
+  );
+
+  onProgress?.({ phase: 'complete', tool: toolName, path: destPath });
+
+  return { success: true, path: destPath };
+}
+
+/**
+ * Extract a binary from an extracted archive to the destination root
+ * Handles glob patterns like "ffmpeg-*-amd64-static/ffmpeg"
+ */
+async function extractBinaryFromPath(extractedPath, binaryPattern, destPath) {
+  // If binary is already at root, nothing to do
+  const directPath = path.join(destPath, path.basename(binaryPattern));
+  if (!binaryPattern.includes('/') && !binaryPattern.includes('*')) {
+    if (fs.existsSync(directPath)) {
+      return; // Already in place
+    }
+  }
+
+  // Handle glob patterns
+  if (binaryPattern.includes('*') || binaryPattern.includes('/')) {
+    const parts = binaryPattern.split('/');
+    let currentPath = extractedPath;
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (part.includes('*')) {
+        // Find matching directory/file
+        if (!fs.existsSync(currentPath)) break;
+        const entries = fs.readdirSync(currentPath);
+        const pattern = new RegExp('^' + part.replace(/\*/g, '.*') + '$');
+        const match = entries.find(e => pattern.test(e));
+        if (match) {
+          currentPath = path.join(currentPath, match);
+        } else {
+          break;
+        }
+      } else {
+        currentPath = path.join(currentPath, part);
+      }
+    }
+
+    // Move the binary to the dest root if found
+    if (fs.existsSync(currentPath) && currentPath !== destPath) {
+      const finalPath = path.join(destPath, path.basename(currentPath));
+      if (currentPath !== finalPath && !fs.existsSync(finalPath)) {
+        fs.renameSync(currentPath, finalPath);
+      }
+    }
+  }
+}
+
+/**
+ * Load a tool manifest from the registry
+ * @param {string} toolName - Tool name
+ * @returns {Promise<Object|null>}
+ */
+async function loadToolManifest(toolName) {
+  // Try local registry first
+  for (const basePath of LOCAL_REGISTRY_PATHS) {
+    const registryDir = path.dirname(basePath);
+    const manifestPath = path.join(registryDir, 'catalog', 'tools', `${toolName}.json`);
+
+    if (fs.existsSync(manifestPath)) {
+      try {
+        return JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  // Try fetching from GitHub raw
+  try {
+    const url = `https://raw.githubusercontent.com/prompt-stack/registry/main/catalog/tools/${toolName}.json`;
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'pstack-cli/2.0',
+        'Accept': 'application/json'
+      }
+    });
+
+    if (response.ok) {
+      return await response.json();
+    }
+  } catch {
+    // Ignore fetch errors
+  }
+
+  return null;
+}
+
+/**
+ * Guess archive type from filename
+ */
+function guessArchiveType(filename) {
+  if (filename.endsWith('.tar.gz') || filename.endsWith('.tgz')) return 'tar.gz';
+  if (filename.endsWith('.tar.xz')) return 'tar.xz';
+  if (filename.endsWith('.zip')) return 'zip';
+  return 'tar.gz'; // default
 }
 
 // =============================================================================
