@@ -598,8 +598,9 @@ async function installStackDependencies(stackPath, onProgress) {
     if (fs.existsSync(packageJsonPath)) {
       onProgress?.({ phase: 'installing-deps', message: 'Installing Node.js dependencies...' });
       try {
-        // Use npm (should be available in PATH)
-        execSync('npm install', { cwd: nodePath, stdio: 'pipe' });
+        // Find npm executable (bundled from Studio, or system npm)
+        const npmCmd = await findNpmExecutable();
+        execSync(`"${npmCmd}" install`, { cwd: nodePath, stdio: 'pipe' });
       } catch (error) {
         console.warn(`Warning: Failed to install Node.js dependencies: ${error.message}`);
         // Don't fail installation if deps fail - stack may still work
@@ -614,8 +615,9 @@ async function installStackDependencies(stackPath, onProgress) {
     if (fs.existsSync(requirementsPath)) {
       onProgress?.({ phase: 'installing-deps', message: 'Installing Python dependencies...' });
       try {
-        // Create venv and install requirements
-        execSync('python3 -m venv venv', { cwd: pythonPath, stdio: 'pipe' });
+        // Find python executable (bundled from Studio, or system python)
+        const pythonCmd = await findPythonExecutable();
+        execSync(`"${pythonCmd}" -m venv venv`, { cwd: pythonPath, stdio: 'pipe' });
         execSync('./venv/bin/pip install -r requirements.txt', { cwd: pythonPath, stdio: 'pipe' });
       } catch (error) {
         console.warn(`Warning: Failed to install Python dependencies: ${error.message}`);
@@ -623,4 +625,68 @@ async function installStackDependencies(stackPath, onProgress) {
       }
     }
   }
+}
+
+/**
+ * Find npm executable - prioritize bundled from Studio, fallback to system
+ * Matches Studio's RuntimeController.getArchPath() pattern
+ * @returns {Promise<string>} Path to npm executable
+ */
+async function findNpmExecutable() {
+  const isWindows = process.platform === 'win32';
+  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+  const binDir = isWindows ? '' : 'bin';
+  const exe = isWindows ? 'npm.cmd' : 'npm';
+
+  // Try bundled npm from Studio (in ~/.prompt-stack/runtimes/node/)
+  const bundledNodeBase = path.join(PATHS.runtimes, 'node');
+
+  // Try architecture-specific path first (e.g., node/arm64/bin/npm)
+  const archSpecificNpm = path.join(bundledNodeBase, arch, binDir, exe);
+
+  if (fs.existsSync(archSpecificNpm)) {
+    return archSpecificNpm;
+  }
+
+  // Try flat structure (e.g., node/bin/npm) for backwards compatibility
+  const flatNpm = path.join(bundledNodeBase, binDir, exe);
+
+  if (fs.existsSync(flatNpm)) {
+    return flatNpm;
+  }
+
+  // Fallback to system npm (for CLI users who installed via npm)
+  return 'npm';
+}
+
+/**
+ * Find python executable - prioritize bundled from Studio, fallback to system
+ * Matches Studio's RuntimeController.getArchPath() pattern
+ * @returns {Promise<string>} Path to python executable
+ */
+async function findPythonExecutable() {
+  const isWindows = process.platform === 'win32';
+  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+  const binDir = isWindows ? '' : 'bin';
+  const exe = isWindows ? 'python.exe' : 'python3';
+
+  // Try bundled python from Studio (in ~/.prompt-stack/runtimes/python/)
+  const bundledPythonBase = path.join(PATHS.runtimes, 'python');
+
+  // Try architecture-specific path first (e.g., python/arm64/bin/python3)
+  const archSpecificPython = path.join(bundledPythonBase, arch, binDir, exe);
+
+  if (fs.existsSync(archSpecificPython)) {
+    return archSpecificPython;
+  }
+
+  // Try flat structure (e.g., python/bin/python3) for backwards compatibility
+  const flatPython = path.join(bundledPythonBase, binDir, exe);
+
+  if (fs.existsSync(flatPython)) {
+    return flatPython;
+  }
+
+  // Fallback to system python3
+  return 'python3';
 }
