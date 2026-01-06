@@ -31,12 +31,13 @@ export const CACHE_TTL = 24 * 60 * 60 * 1000;
 
 /**
  * Local registry paths (for development)
+ * Set USE_LOCAL_REGISTRY=true environment variable to enable local development mode
  */
-const LOCAL_REGISTRY_PATHS = [
+const LOCAL_REGISTRY_PATHS = process.env.USE_LOCAL_REGISTRY === 'true' ? [
   path.join(process.cwd(), 'registry', 'index.json'),
   path.join(process.cwd(), '..', 'registry', 'index.json'),
   '/Users/hoff/dev/prompt-stack/registry/index.json'
-];
+] : [];
 
 // =============================================================================
 // INDEX FETCHING
