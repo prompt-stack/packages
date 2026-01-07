@@ -161,19 +161,15 @@ export function isWindows() {
  */
 export function ensureDirectories() {
   const dirs = [
-    PATHS.packages,
-    PATHS.stacks,
-    PATHS.prompts,
-    PATHS.runtimes,
-    PATHS.tools,
-    PATHS.agents,
-    PATHS.store,
-    PATHS.bins,
-    PATHS.locks,
-    PATHS.vault,
-    PATHS.db,
-    PATHS.cache,
-    PATHS.logs
+    PATHS.stacks,      // MCP servers (google-ai, notion-workspace, etc.)
+    PATHS.prompts,     // Reusable prompts
+    PATHS.runtimes,    // Language runtimes (node, python, bun, deno)
+    PATHS.tools,       // Utility binaries (ffmpeg, git, jq, etc.)
+    PATHS.agents,      // AI CLI agents (claude, codex, gemini, copilot)
+    PATHS.bins,        // Shims directory (Studio only)
+    PATHS.locks,       // Lock files
+    PATHS.db,          // Database directory
+    PATHS.cache        // Registry cache
   ];
 
   for (const dir of dirs) {
@@ -188,7 +184,7 @@ export function ensureDirectories() {
  * @returns {boolean}
  */
 export function areDirectoriesInitialized() {
-  return fs.existsSync(PATHS.packages) && fs.existsSync(PATHS.db);
+  return fs.existsSync(PATHS.stacks) && fs.existsSync(PATHS.db);
 }
 
 // =============================================================================
