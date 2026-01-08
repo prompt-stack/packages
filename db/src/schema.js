@@ -4,7 +4,7 @@
 
 import { getDb } from './index.js';
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 const SCHEMA_SQL = `
 -- Schema version tracking
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   project_id TEXT,
 
   -- Origin tracking
-  origin TEXT NOT NULL CHECK (origin IN ('promptstack', 'provider-import', 'mixed')),
+  origin TEXT NOT NULL CHECK (origin IN ('rudi', 'provider-import', 'mixed')),
   origin_imported_at TEXT,
   origin_native_file TEXT,
 
@@ -187,13 +187,13 @@ CREATE INDEX IF NOT EXISTS idx_model_pricing_provider ON model_pricing(provider)
 CREATE INDEX IF NOT EXISTS idx_model_pricing_pattern ON model_pricing(model_pattern);
 
 -- =============================================================================
--- PACKAGES (stacks, prompts, runtimes, tools, agents)
+-- PACKAGES (stacks, prompts, runtimes, binaries, agents)
 -- =============================================================================
 
 -- Installed packages
 CREATE TABLE IF NOT EXISTS packages (
-  id TEXT PRIMARY KEY,              -- e.g., 'stack:pdf-creator', 'tool:ffmpeg', 'agent:claude'
-  kind TEXT NOT NULL CHECK (kind IN ('stack', 'prompt', 'runtime', 'tool', 'agent')),
+  id TEXT PRIMARY KEY,              -- e.g., 'stack:pdf-creator', 'binary:ffmpeg', 'agent:claude'
+  kind TEXT NOT NULL CHECK (kind IN ('stack', 'prompt', 'runtime', 'binary', 'tool', 'agent')),
   name TEXT NOT NULL,
   version TEXT NOT NULL,
   description TEXT,
@@ -377,7 +377,7 @@ function runMigrations(db, from, to) {
       db.exec(`
         CREATE TABLE IF NOT EXISTS packages (
           id TEXT PRIMARY KEY,
-          kind TEXT NOT NULL CHECK (kind IN ('stack', 'prompt', 'runtime', 'tool', 'agent')),
+          kind TEXT NOT NULL CHECK (kind IN ('stack', 'prompt', 'runtime', 'binary', 'tool', 'agent')),
           name TEXT NOT NULL,
           version TEXT NOT NULL,
           description TEXT,
@@ -449,17 +449,82 @@ function runMigrations(db, from, to) {
           last_used_at TEXT
         );
       `);
+    },
+
+    // Version 4: Allow binary kind in packages (rename tool -> binary)
+    4: (db) => {
+      db.exec(`
+        PRAGMA foreign_keys=OFF;
+
+        CREATE TABLE IF NOT EXISTS packages_new (
+          id TEXT PRIMARY KEY,
+          kind TEXT NOT NULL CHECK (kind IN ('stack', 'prompt', 'runtime', 'binary', 'tool', 'agent')),
+          name TEXT NOT NULL,
+          version TEXT NOT NULL,
+          description TEXT,
+          source TEXT NOT NULL CHECK (source IN ('registry', 'local', 'bundled')),
+          source_url TEXT,
+          install_path TEXT NOT NULL,
+          installed_at TEXT NOT NULL,
+          updated_at TEXT,
+          manifest_json TEXT,
+          status TEXT DEFAULT 'installed' CHECK (status IN ('installed', 'disabled', 'broken'))
+        );
+
+        INSERT INTO packages_new (
+          id,
+          kind,
+          name,
+          version,
+          description,
+          source,
+          source_url,
+          install_path,
+          installed_at,
+          updated_at,
+          manifest_json,
+          status
+        )
+        SELECT
+          id,
+          CASE WHEN kind = 'tool' THEN 'binary' ELSE kind END,
+          name,
+          version,
+          description,
+          source,
+          source_url,
+          install_path,
+          installed_at,
+          updated_at,
+          manifest_json,
+          status
+        FROM packages;
+
+        DROP TABLE packages;
+        ALTER TABLE packages_new RENAME TO packages;
+
+        CREATE INDEX IF NOT EXISTS idx_packages_kind ON packages(kind);
+        CREATE INDEX IF NOT EXISTS idx_packages_status ON packages(status);
+
+        PRAGMA foreign_keys=ON;
+      `);
     }
   };
 
   for (let v = from + 1; v <= to; v++) {
     if (migrations[v]) {
       console.log(`  Applying migration v${v}...`);
-      db.transaction(() => {
+      const applyMigration = () => {
         migrations[v](db);
         db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)')
           .run(v, new Date().toISOString());
-      })();
+      };
+
+      if (v === 4) {
+        applyMigration();
+      } else {
+        db.transaction(applyMigration)();
+      }
     }
   }
 

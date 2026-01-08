@@ -1,5 +1,5 @@
 {
-  "name": "@prompt-stack/manifest",
+  "name": "@learnrudi/manifest",
   "version": "1.0.0",
   "description": "Parse and validate stack.yaml, prompt.yaml manifests",
   "type": "module",

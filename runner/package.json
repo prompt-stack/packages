@@ -1,7 +1,7 @@
 {
-  "name": "@prompt-stack/runner",
+  "name": "@learnrudi/runner",
   "version": "1.0.0",
-  "description": "Execution engine for Prompt Stack - spawn processes, stream logs",
+  "description": "Execution engine for RUDI - spawn processes, stream logs",
   "type": "module",
   "main": "src/index.js",
   "exports": {
@@ -15,9 +15,9 @@
     "test": "node --test src/__tests__/"
   },
   "dependencies": {
-    "@prompt-stack/core": "workspace:*",
-    "@prompt-stack/db": "workspace:*",
-    "@prompt-stack/manifest": "workspace:*"
+    "@learnrudi/core": "workspace:*",
+    "@learnrudi/db": "workspace:*",
+    "@learnrudi/manifest": "workspace:*"
   },
   "devDependencies": {},
   "engines": {

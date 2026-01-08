@@ -7,24 +7,24 @@ Shared libraries and utilities for Prompt Stack. Used by both the CLI and Studio
 ```
 packages/
 ├── core/                          # Core resolver and installer
-│   └── @prompt-stack/core
+│   └── @prompt/core
 ├── runner/                        # Execution engine
-│   └── @prompt-stack/runner
+│   └── @prompt/runner
 ├── manifest/                      # Stack/prompt manifest parsing
-│   └── @prompt-stack/manifest
+│   └── @prompt/manifest
 └── db/                            # Database and session management
-    └── @prompt-stack/db
+    └── @prompt/db
 ```
 
 ## Packages
 
-### @prompt-stack/core
+### @prompt/core
 
 Resolver, installer, and registry client. Handles:
 
 - Package discovery and search
 - Dependency resolution
-- Installation to `~/.prompt-stack/packages/`
+- Installation to `~/.prompt/packages/`
 - Lockfile generation
 - Registry caching
 
@@ -38,7 +38,7 @@ export async function installPackage(id: string, version?: string): Promise<Inst
 export async function listInstalledPackages(kind?: 'stack' | 'prompt' | 'runtime'): Promise<Package[]>
 ```
 
-### @prompt-stack/runner
+### @prompt/runner
 
 Execution engine for stacks and prompts. Handles:
 
@@ -56,7 +56,7 @@ export async function runStack(id: string, options: RunOptions): Promise<RunResu
 export async function checkSecrets(required: SecretDeclaration[]): Promise<SecretCheck>
 ```
 
-### @prompt-stack/manifest
+### @prompt/manifest
 
 Stack, prompt, and runtime manifest parsing. Validates:
 
@@ -75,7 +75,7 @@ export function parsePromptManifest(path: string): PromptManifest
 export function validateManifest(manifest: any): ValidationResult
 ```
 
-### @prompt-stack/db
+### @prompt/db
 
 SQLite-based database layer. Manages:
 
@@ -117,7 +117,7 @@ npm run build
 Build a specific package:
 
 ```bash
-npm run build -- --filter=@prompt-stack/core
+npm run build -- --filter=@prompt/core
 ```
 
 ### Testing
@@ -131,7 +131,7 @@ npm test
 Test a specific package:
 
 ```bash
-npm test -- --filter=@prompt-stack/runner
+npm test -- --filter=@prompt/runner
 ```
 
 ### Linking to CLI/Studio
@@ -143,7 +143,7 @@ Both CLI and Studio import these packages. During development:
 npm link
 
 # In cli/ or studio/
-npm link @prompt-stack/core @prompt-stack/runner @prompt-stack/manifest @prompt-stack/db
+npm link @prompt/core @prompt/runner @prompt/manifest @prompt/db
 ```
 
 Or use workspace references (preferred):
@@ -151,7 +151,7 @@ Or use workspace references (preferred):
 ```json
 {
   "dependencies": {
-    "@prompt-stack/core": "workspace:*"
+    "@prompt/core": "workspace:*"
   }
 }
 ```
@@ -170,13 +170,13 @@ export async function operation(params: Params): Promise<Result>
 ```
 CLI/Studio Input
     ↓
-@prompt-stack/manifest (parse/validate)
+@prompt/manifest (parse/validate)
     ↓
-@prompt-stack/core (resolve/install)
+@prompt/core (resolve/install)
     ↓
-@prompt-stack/runner (execute)
+@prompt/runner (execute)
     ↓
-@prompt-stack/db (store/log)
+@prompt/db (store/log)
     ↓
 Output / Artifact
 ```
@@ -202,7 +202,7 @@ export class SecretMissingError extends PromptStackError {}
 Packages are published to npm as scoped packages:
 
 ```bash
-npm publish --scope=@prompt-stack
+npm publish --scope=@prompt
 ```
 
 Only CLI and Runner are published publicly.  Core and DB are internal-only (for now).

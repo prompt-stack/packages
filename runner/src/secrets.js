@@ -1,5 +1,5 @@
 /**
- * Secrets management for Prompt Stack
+ * Secrets management for RUDI
  * Handles loading, validating, and redacting secrets
  */
 
@@ -7,7 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-const SECRETS_PATH = path.join(os.homedir(), '.prompt-stack', 'secrets.json');
+const SECRETS_PATH = path.join(os.homedir(), '.rudi', 'secrets.json');
 
 /**
  * @typedef {Object} SecretDefinition

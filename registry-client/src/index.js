@@ -1,5 +1,5 @@
 /**
- * @prompt-stack/registry-client
+ * @learnrudi/registry-client
  *
  * Registry client for fetching index, downloading packages, caching, and verification.
  * Handles all HTTP and caching concerns.
@@ -8,7 +8,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { PATHS, getPlatformArch } from '@prompt-stack/env';
+import { PATHS, getPlatformArch } from '@learnrudi/env';
 
 // =============================================================================
 // CONFIGURATION
@@ -17,12 +17,12 @@ import { PATHS, getPlatformArch } from '@prompt-stack/env';
 /**
  * Default registry URL
  */
-export const DEFAULT_REGISTRY_URL = 'https://raw.githubusercontent.com/prompt-stack/registry/main/index.json';
+export const DEFAULT_REGISTRY_URL = 'https://raw.githubusercontent.com/learn-rudi/registry/main/index.json';
 
 /**
  * Default downloads base URL (from registry repo releases)
  */
-export const RUNTIMES_DOWNLOAD_BASE = 'https://github.com/prompt-stack/registry/releases/download';
+export const RUNTIMES_DOWNLOAD_BASE = 'https://github.com/learn-rudi/registry/releases/download';
 
 /**
  * Cache TTL in milliseconds (24 hours)
@@ -33,11 +33,16 @@ export const CACHE_TTL = 24 * 60 * 60 * 1000;
  * Local registry paths (for development)
  * Set USE_LOCAL_REGISTRY=true environment variable to enable local development mode
  */
-const LOCAL_REGISTRY_PATHS = process.env.USE_LOCAL_REGISTRY === 'true' ? [
-  path.join(process.cwd(), 'registry', 'index.json'),
-  path.join(process.cwd(), '..', 'registry', 'index.json'),
-  '/Users/hoff/dev/prompt-stack/registry/index.json'
-] : [];
+function getLocalRegistryPaths() {
+  if (process.env.USE_LOCAL_REGISTRY !== 'true') {
+    return [];
+  }
+  return [
+    path.join(process.cwd(), 'registry', 'index.json'),
+    path.join(process.cwd(), '..', 'registry', 'index.json'),
+    '/Users/hoff/dev/RUDI/registry/index.json'
+  ];
+}
 
 // =============================================================================
 // INDEX FETCHING
@@ -84,7 +89,7 @@ export async function fetchIndex(options = {}) {
     const response = await fetch(url, {
       headers: {
         'Accept': 'application/json',
-        'User-Agent': 'pstack-cli/2.0'
+        'User-Agent': 'rudi-cli/2.0'
       }
     });
 
@@ -169,7 +174,7 @@ function getCacheMtime() {
  * @returns {{ index: Object, mtime: number }|null}
  */
 function getLocalIndex() {
-  for (const localPath of LOCAL_REGISTRY_PATHS) {
+  for (const localPath of getLocalRegistryPaths()) {
     if (fs.existsSync(localPath)) {
       try {
         const index = JSON.parse(fs.readFileSync(localPath, 'utf-8'));
@@ -219,7 +224,15 @@ export function checkCache() {
 /**
  * All valid package kinds
  */
-export const PACKAGE_KINDS = ['stack', 'prompt', 'runtime', 'tool', 'agent'];
+export const PACKAGE_KINDS = ['stack', 'prompt', 'runtime', 'binary', 'agent'];
+
+const KIND_PLURALS = {
+  binary: 'binaries'
+};
+
+function getKindSection(kind) {
+  return KIND_PLURALS[kind] || `${kind}s`;
+}
 
 /**
  * Search packages in the registry
@@ -238,7 +251,7 @@ export async function searchPackages(query, options = {}) {
   const kinds = kind ? [kind] : PACKAGE_KINDS;
 
   for (const k of kinds) {
-    const section = index.packages?.[k + 's'];
+    const section = index.packages?.[getKindSection(k)];
     if (!section) continue;
 
     const packages = [...(section.official || []), ...(section.community || [])];
@@ -269,7 +282,7 @@ function matchesQuery(pkg, query) {
 
 /**
  * Get a specific package from the registry
- * @param {string} id - Package ID (e.g., 'stack:pdf-creator', 'tool:ffmpeg', 'agent:claude')
+ * @param {string} id - Package ID (e.g., 'stack:pdf-creator', 'binary:ffmpeg', 'agent:claude')
  * @returns {Promise<Object|null>}
  */
 export async function getPackage(id) {
@@ -279,7 +292,7 @@ export async function getPackage(id) {
   const kinds = kind ? [kind] : PACKAGE_KINDS;
 
   for (const k of kinds) {
-    const section = index.packages?.[k + 's'];
+    const section = index.packages?.[getKindSection(k)];
     if (!section) continue;
 
     const packages = [...(section.official || []), ...(section.community || [])];
@@ -298,12 +311,12 @@ export async function getPackage(id) {
 
 /**
  * List all packages of a specific kind
- * @param {'stack' | 'prompt' | 'runtime' | 'tool' | 'agent'} kind
+ * @param {'stack' | 'prompt' | 'runtime' | 'binary' | 'agent'} kind
  * @returns {Promise<Array>}
  */
 export async function listPackages(kind) {
   const index = await fetchIndex();
-  const section = index.packages?.[kind + 's'];
+  const section = index.packages?.[getKindSection(kind)];
   if (!section) return [];
   return [...(section.official || []), ...(section.community || [])];
 }
@@ -321,7 +334,16 @@ export function getPackageKinds() {
 // =============================================================================
 
 /**
- * Download a package from the registry
+ * GitHub raw content base URL
+ */
+const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/learn-rudi/registry/main';
+
+/**
+ * Download a package from the registry (from GitHub raw for stacks)
+ *
+ * Stacks are downloaded as source and built locally using bundled runtimes.
+ * No tarballs needed - just fetch source files and run npm/pip install.
+ *
  * @param {Object} pkg - Package metadata from registry
  * @param {string} destPath - Destination path
  * @param {Object} options
@@ -331,37 +353,213 @@ export function getPackageKinds() {
 export async function downloadPackage(pkg, destPath, options = {}) {
   const { onProgress } = options;
 
-  // For now, we handle catalog packages (local in registry)
-  // In production, this would download tarballs
+  const registryPath = pkg.path; // e.g., 'catalog/stacks/slack' or 'catalog/prompts/code-review.md'
 
-  const registryPath = pkg.path; // e.g., 'catalog/stacks/official/pdf-creator' or 'catalog/prompts/code-review.md'
+  // Create destination directory
+  if (!fs.existsSync(destPath)) {
+    fs.mkdirSync(destPath, { recursive: true });
+  }
 
-  // Try to find local registry
-  for (const basePath of LOCAL_REGISTRY_PATHS) {
-    const registryDir = path.dirname(basePath);
-    const pkgSourcePath = path.join(registryDir, registryPath);
+  onProgress?.({ phase: 'downloading', package: pkg.name || pkg.id });
 
-    if (fs.existsSync(pkgSourcePath)) {
-      const stat = fs.statSync(pkgSourcePath);
+  // For stacks, download source files from GitHub raw
+  if (pkg.kind === 'stack' || registryPath.includes('/stacks/')) {
+    await downloadStackFromGitHub(registryPath, destPath, onProgress);
+    return { success: true, path: destPath };
+  }
 
-      if (stat.isFile()) {
-        // Handle single file packages (prompts are .md files)
-        // destPath for prompts is the full file path including filename
-        const destDir = path.dirname(destPath);
-        if (!fs.existsSync(destDir)) {
-          fs.mkdirSync(destDir, { recursive: true });
-        }
-        fs.copyFileSync(pkgSourcePath, destPath);
-      } else {
-        // Handle directory packages (stacks, tools, etc.)
-        await copyDirectory(pkgSourcePath, destPath);
-      }
-      return { success: true, path: destPath };
+  // For single file packages (prompts)
+  if (registryPath.endsWith('.md')) {
+    const url = `${GITHUB_RAW_BASE}/${registryPath}`;
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'rudi-cli/2.0' }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to download ${registryPath}: HTTP ${response.status}`);
+    }
+
+    const content = await response.text();
+    const destDir = path.dirname(destPath);
+    if (!fs.existsSync(destDir)) {
+      fs.mkdirSync(destDir, { recursive: true });
+    }
+    fs.writeFileSync(destPath, content);
+    return { success: true, path: destPath };
+  }
+
+  throw new Error(`Unsupported package type: ${registryPath}`);
+}
+
+/**
+ * Download a stack from GitHub raw content
+ * Downloads manifest.json, package.json, and source files
+ */
+async function downloadStackFromGitHub(registryPath, destPath, onProgress) {
+  const baseUrl = `${GITHUB_RAW_BASE}/${registryPath}`;
+
+  // First, list the directory contents using GitHub API to see what exists
+  const apiUrl = `https://api.github.com/repos/learn-rudi/registry/contents/${registryPath}`;
+  const listResponse = await fetch(apiUrl, {
+    headers: {
+      'User-Agent': 'rudi-cli/2.0',
+      'Accept': 'application/vnd.github.v3+json'
+    }
+  });
+
+  if (!listResponse.ok) {
+    throw new Error(`Stack not found: ${registryPath}`);
+  }
+
+  const contents = await listResponse.json();
+  if (!Array.isArray(contents)) {
+    throw new Error(`Invalid stack directory: ${registryPath}`);
+  }
+
+  // Build a map of what exists in the directory
+  const existingItems = new Map();
+  for (const item of contents) {
+    existingItems.set(item.name, item);
+  }
+
+  // Download manifest.json (required)
+  const manifestItem = existingItems.get('manifest.json');
+  if (!manifestItem) {
+    throw new Error(`Stack missing manifest.json: ${registryPath}`);
+  }
+
+  const manifestResponse = await fetch(manifestItem.download_url, {
+    headers: { 'User-Agent': 'rudi-cli/2.0' }
+  });
+  const manifest = await manifestResponse.json();
+  fs.writeFileSync(path.join(destPath, 'manifest.json'), JSON.stringify(manifest, null, 2));
+  onProgress?.({ phase: 'downloading', file: 'manifest.json' });
+
+  // Download package.json if it exists
+  const pkgJsonItem = existingItems.get('package.json');
+  if (pkgJsonItem) {
+    const pkgJsonResponse = await fetch(pkgJsonItem.download_url, {
+      headers: { 'User-Agent': 'rudi-cli/2.0' }
+    });
+    if (pkgJsonResponse.ok) {
+      const pkgJson = await pkgJsonResponse.text();
+      fs.writeFileSync(path.join(destPath, 'package.json'), pkgJson);
+      onProgress?.({ phase: 'downloading', file: 'package.json' });
     }
   }
 
-  // If not found locally, would fetch from GitHub
-  throw new Error(`Package source not found: ${registryPath}`);
+  // Download .env.example if it exists
+  const envExampleItem = existingItems.get('.env.example');
+  if (envExampleItem) {
+    const envResponse = await fetch(envExampleItem.download_url, {
+      headers: { 'User-Agent': 'rudi-cli/2.0' }
+    });
+    if (envResponse.ok) {
+      const envContent = await envResponse.text();
+      fs.writeFileSync(path.join(destPath, '.env.example'), envContent);
+    }
+  }
+
+  // Download tsconfig.json if it exists
+  const tsconfigItem = existingItems.get('tsconfig.json');
+  if (tsconfigItem) {
+    const tsconfigResponse = await fetch(tsconfigItem.download_url, {
+      headers: { 'User-Agent': 'rudi-cli/2.0' }
+    });
+    if (tsconfigResponse.ok) {
+      const tsconfig = await tsconfigResponse.text();
+      fs.writeFileSync(path.join(destPath, 'tsconfig.json'), tsconfig);
+    }
+  }
+
+  // Download requirements.txt if it exists (Python)
+  const requirementsItem = existingItems.get('requirements.txt');
+  if (requirementsItem) {
+    const reqResponse = await fetch(requirementsItem.download_url, {
+      headers: { 'User-Agent': 'rudi-cli/2.0' }
+    });
+    if (reqResponse.ok) {
+      const requirements = await reqResponse.text();
+      fs.writeFileSync(path.join(destPath, 'requirements.txt'), requirements);
+    }
+  }
+
+  // Download source directories - check for common patterns
+  const sourceDirs = ['src', 'dist', 'node', 'python', 'lib'];
+  for (const dirName of sourceDirs) {
+    const dirItem = existingItems.get(dirName);
+    if (dirItem && dirItem.type === 'dir') {
+      onProgress?.({ phase: 'downloading', directory: dirName });
+      await downloadDirectoryFromGitHub(
+        `${baseUrl}/${dirName}`,
+        path.join(destPath, dirName),
+        onProgress
+      );
+    }
+  }
+}
+
+/**
+ * Download a directory from GitHub using the GitHub API
+ * Note: This uses the GitHub Contents API to list files
+ */
+async function downloadDirectoryFromGitHub(dirUrl, destDir, onProgress) {
+  // Convert raw URL to API URL
+  // From: https://raw.githubusercontent.com/learn-rudi/registry/main/catalog/stacks/slack/src
+  // To: https://api.github.com/repos/learn-rudi/registry/contents/catalog/stacks/slack/src
+  const apiUrl = dirUrl
+    .replace('https://raw.githubusercontent.com/', 'https://api.github.com/repos/')
+    .replace('/main/', '/contents/');
+
+  try {
+    const response = await fetch(apiUrl, {
+      headers: {
+        'User-Agent': 'rudi-cli/2.0',
+        'Accept': 'application/vnd.github.v3+json'
+      }
+    });
+
+    if (!response.ok) {
+      // Directory might not exist, that's okay
+      return;
+    }
+
+    const contents = await response.json();
+
+    if (!Array.isArray(contents)) {
+      // Single file, not a directory
+      return;
+    }
+
+    // Create destination directory
+    if (!fs.existsSync(destDir)) {
+      fs.mkdirSync(destDir, { recursive: true });
+    }
+
+    for (const item of contents) {
+      if (item.type === 'file') {
+        // Download file
+        const fileResponse = await fetch(item.download_url, {
+          headers: { 'User-Agent': 'rudi-cli/2.0' }
+        });
+        if (fileResponse.ok) {
+          const content = await fileResponse.text();
+          fs.writeFileSync(path.join(destDir, item.name), content);
+          onProgress?.({ phase: 'downloading', file: item.name });
+        }
+      } else if (item.type === 'dir') {
+        // Recursively download subdirectory
+        await downloadDirectoryFromGitHub(
+          item.url.replace('https://api.github.com/repos/', 'https://raw.githubusercontent.com/').replace('/contents/', '/main/'),
+          path.join(destDir, item.name),
+          onProgress
+        );
+      }
+    }
+  } catch (error) {
+    // Directory download failed, might not exist
+    console.error(`Warning: Could not download ${dirUrl}: ${error.message}`);
+  }
 }
 
 /**
@@ -400,7 +598,7 @@ export async function downloadRuntime(runtime, version, destPath, options = {}) 
     // Download the tarball
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'pstack-cli/2.0',
+        'User-Agent': 'rudi-cli/2.0',
         'Accept': 'application/octet-stream'
       }
     });
@@ -460,8 +658,8 @@ export async function downloadRuntime(runtime, version, destPath, options = {}) 
 // =============================================================================
 
 /**
- * Download a tool binary using upstream URLs from the tool manifest
- * @param {string} toolName - Tool name (e.g., 'ffmpeg', 'pandoc')
+ * Download a binary using upstream URLs from the binary manifest
+ * @param {string} toolName - Binary name (e.g., 'ffmpeg', 'pandoc')
  * @param {string} destPath - Destination path
  * @param {Object} options
  * @param {Function} [options.onProgress] - Progress callback
@@ -471,10 +669,10 @@ export async function downloadTool(toolName, destPath, options = {}) {
   const { onProgress } = options;
   const platformArch = getPlatformArch();
 
-  // Load the tool manifest from the registry
+  // Load the binary manifest from the registry
   const toolManifest = await loadToolManifest(toolName);
   if (!toolManifest) {
-    throw new Error(`Tool manifest not found for: ${toolName}`);
+    throw new Error(`Binary manifest not found for: ${toolName}`);
   }
 
   // Create temp directory for download
@@ -517,7 +715,7 @@ export async function downloadTool(toolName, destPath, options = {}) {
         // Download the archive
         const response = await fetch(url, {
           headers: {
-            'User-Agent': 'pstack-cli/2.0',
+            'User-Agent': 'rudi-cli/2.0',
             'Accept': 'application/octet-stream'
           }
         });
@@ -588,7 +786,7 @@ export async function downloadTool(toolName, destPath, options = {}) {
     try {
       const response = await fetch(upstreamUrl, {
         headers: {
-          'User-Agent': 'pstack-cli/2.0',
+          'User-Agent': 'rudi-cli/2.0',
           'Accept': 'application/octet-stream'
         }
       });
@@ -636,12 +834,12 @@ export async function downloadTool(toolName, destPath, options = {}) {
     }
   }
 
-  // Write tool metadata
+  // Write binary metadata
   fs.writeFileSync(
     path.join(destPath, 'manifest.json'),
     JSON.stringify({
-      id: `tool:${toolName}`,
-      kind: 'tool',
+      id: `binary:${toolName}`,
+      kind: 'binary',
       name: toolManifest.name || toolName,
       version: toolManifest.version,
       binaries: toolManifest.binaries || [toolName],
@@ -702,15 +900,15 @@ async function extractBinaryFromPath(extractedPath, binaryPattern, destPath) {
 }
 
 /**
- * Load a tool manifest from the registry
- * @param {string} toolName - Tool name
+ * Load a binary manifest from the registry
+ * @param {string} toolName - Binary name
  * @returns {Promise<Object|null>}
  */
 async function loadToolManifest(toolName) {
   // Try local registry first
-  for (const basePath of LOCAL_REGISTRY_PATHS) {
+  for (const basePath of getLocalRegistryPaths()) {
     const registryDir = path.dirname(basePath);
-    const manifestPath = path.join(registryDir, 'catalog', 'tools', `${toolName}.json`);
+    const manifestPath = path.join(registryDir, 'catalog', 'binaries', `${toolName}.json`);
 
     if (fs.existsSync(manifestPath)) {
       try {
@@ -723,10 +921,10 @@ async function loadToolManifest(toolName) {
 
   // Try fetching from GitHub raw
   try {
-    const url = `https://raw.githubusercontent.com/prompt-stack/registry/main/catalog/tools/${toolName}.json`;
+    const url = `https://raw.githubusercontent.com/learn-rudi/registry/main/catalog/binaries/${toolName}.json`;
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'pstack-cli/2.0',
+        'User-Agent': 'rudi-cli/2.0',
         'Accept': 'application/json'
       }
     });

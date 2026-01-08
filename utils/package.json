@@ -1,11 +1,13 @@
 {
-  "name": "@learnrudi/env",
+  "name": "@learnrudi/utils",
   "version": "1.0.0",
-  "description": "Environment, paths, and platform detection for RUDI",
+  "description": "Shared utilities for RUDI",
   "type": "module",
   "main": "src/index.js",
   "exports": {
-    ".": "./src/index.js"
+    ".": "./src/index.js",
+    "./args": "./src/args.js",
+    "./help": "./src/help.js"
   },
   "scripts": {
     "test": "node --test src/__tests__/"

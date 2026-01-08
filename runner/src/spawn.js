@@ -5,7 +5,7 @@
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
-import { PATHS, getPackagePath, isPackageInstalled } from '@prompt-stack/core';
+import { PATHS, getPackagePath, isPackageInstalled } from '@learnrudi/core';
 import { getSecrets, redactSecrets } from './secrets.js';
 
 /**
@@ -50,13 +50,8 @@ export async function runStack(id, options = {}) {
 
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
 
-  // Determine entry point
-  const entry = manifest.entry || 'index.js';
-  const entryPath = path.join(packagePath, entry);
-
-  // Determine runtime
-  const runtime = manifest.runtime || 'runtime:node';
-  const command = getCommand(runtime);
+  // Determine command and args
+  const { command, args } = resolveCommandFromManifest(manifest, packagePath);
 
   // Get secrets
   const secrets = await getSecrets(manifest.requires?.secrets || []);
@@ -66,13 +61,13 @@ export async function runStack(id, options = {}) {
     ...process.env,
     ...env,
     ...secrets,
-    PSTACK_INPUTS: JSON.stringify(inputs),
-    PSTACK_PACKAGE_ID: id,
-    PSTACK_PACKAGE_PATH: packagePath
+    RUDI_INPUTS: JSON.stringify(inputs),
+    RUDI_PACKAGE_ID: id,
+    RUDI_PACKAGE_PATH: packagePath
   };
 
   // Spawn process
-  const proc = spawn(command, [entryPath], {
+  const proc = spawn(command, args, {
     cwd: cwd || packagePath,
     env: runEnv,
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -161,6 +156,34 @@ function getCommand(runtime) {
     default:
       return runtimeName;
   }
+}
+
+function resolveCommandFromManifest(manifest, packagePath) {
+  if (manifest.command) {
+    const cmdArray = Array.isArray(manifest.command) ? manifest.command : [manifest.command];
+    const command = resolveRelativePath(cmdArray[0], packagePath);
+    const args = cmdArray.slice(1).map(arg => resolveRelativePath(arg, packagePath));
+    return { command, args };
+  }
+
+  const entry = manifest.entry || 'index.js';
+  const entryPath = path.join(packagePath, entry);
+  const runtime = manifest.runtime || 'runtime:node';
+  const command = getCommand(runtime);
+  return { command, args: [entryPath] };
+}
+
+function resolveRelativePath(value, basePath) {
+  if (typeof value !== 'string' || value.startsWith('-')) {
+    return value;
+  }
+  if (path.isAbsolute(value)) {
+    return value;
+  }
+  if (value.includes('/') || value.startsWith('.')) {
+    return path.join(basePath, value);
+  }
+  return value;
 }
 
 /**

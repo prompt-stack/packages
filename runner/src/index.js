@@ -1,5 +1,5 @@
 /**
- * Runner package for Prompt Stack
+ * Runner package for RUDI
  * Handles executing stacks, streaming logs, managing secrets
  */
 

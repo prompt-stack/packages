@@ -1,5 +1,5 @@
 /**
- * Search module for Prompt Stack
+ * Search module for RUDI
  * Provides full-text search using SQLite FTS5
  */
 

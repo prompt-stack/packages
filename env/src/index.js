@@ -1,8 +1,10 @@
 /**
- * @prompt-stack/env
+ * @learnrudi/env
  *
  * Environment configuration, paths, and platform detection.
  * This package has NO dependencies - it's the foundation.
+ *
+ * © 2026 RUDI LLC. All rights reserved.
  */
 
 import path from 'path';
@@ -14,56 +16,56 @@ import fs from 'fs';
 // =============================================================================
 
 /**
- * Root directory for all Prompt Stack data
+ * Root directory for all RUDI data
  */
-export const PROMPT_STACK_HOME = path.join(os.homedir(), '.prompt-stack');
+export const RUDI_HOME = path.join(os.homedir(), '.rudi');
 
 /**
  * All standard paths
  */
 export const PATHS = {
   // Root
-  home: PROMPT_STACK_HOME,
+  home: RUDI_HOME,
 
   // Installed packages - shared with Studio for unified discovery
-  packages: path.join(PROMPT_STACK_HOME, 'packages'),
-  stacks: path.join(PROMPT_STACK_HOME, 'stacks'),     // Shared with Studio
-  prompts: path.join(PROMPT_STACK_HOME, 'prompts'),   // Shared with Studio
+  packages: path.join(RUDI_HOME, 'packages'),
+  stacks: path.join(RUDI_HOME, 'stacks'),     // Shared with Studio
+  prompts: path.join(RUDI_HOME, 'prompts'),   // Shared with Studio
 
   // Runtimes (interpreters: node, python, deno, bun)
-  runtimes: path.join(PROMPT_STACK_HOME, 'runtimes'),
+  runtimes: path.join(RUDI_HOME, 'runtimes'),
 
-  // Tools (utility binaries: ffmpeg, imagemagick, ripgrep, etc.)
-  tools: path.join(PROMPT_STACK_HOME, 'tools'),
+  // Binaries (utility CLIs: ffmpeg, imagemagick, ripgrep, etc.)
+  binaries: path.join(RUDI_HOME, 'binaries'),
 
   // Agents (AI CLI tools: claude, codex, gemini, copilot, ollama)
-  agents: path.join(PROMPT_STACK_HOME, 'agents'),
+  agents: path.join(RUDI_HOME, 'agents'),
 
   // Runtime binaries (content-addressed)
-  store: path.join(PROMPT_STACK_HOME, 'store'),
+  store: path.join(RUDI_HOME, 'store'),
 
   // Shims (symlinks to store/)
-  bins: path.join(PROMPT_STACK_HOME, 'bins'),
+  bins: path.join(RUDI_HOME, 'bins'),
 
   // Lockfiles
-  locks: path.join(PROMPT_STACK_HOME, 'locks'),
+  locks: path.join(RUDI_HOME, 'locks'),
 
   // Secrets (OS Keychain preferred, encrypted file fallback)
-  vault: path.join(PROMPT_STACK_HOME, 'vault'),
+  vault: path.join(RUDI_HOME, 'vault'),
 
   // Database (shared with Studio)
-  db: PROMPT_STACK_HOME,
-  dbFile: path.join(PROMPT_STACK_HOME, 'prompt-stack.db'),
+  db: RUDI_HOME,
+  dbFile: path.join(RUDI_HOME, 'rudi.db'),
 
   // Cache
-  cache: path.join(PROMPT_STACK_HOME, 'cache'),
-  registryCache: path.join(PROMPT_STACK_HOME, 'cache', 'registry.json'),
+  cache: path.join(RUDI_HOME, 'cache'),
+  registryCache: path.join(RUDI_HOME, 'cache', 'registry.json'),
 
   // Config
-  config: path.join(PROMPT_STACK_HOME, 'config.json'),
+  config: path.join(RUDI_HOME, 'config.json'),
 
   // Logs
-  logs: path.join(PROMPT_STACK_HOME, 'logs')
+  logs: path.join(RUDI_HOME, 'logs')
 };
 
 // =============================================================================
@@ -75,7 +77,7 @@ export const PATHS = {
  * @returns {string}
  */
 export function getInstallRoot() {
-  return PROMPT_STACK_HOME;
+  return RUDI_HOME;
 }
 
 /**
@@ -164,7 +166,7 @@ export function ensureDirectories() {
     PATHS.stacks,      // MCP servers (google-ai, notion-workspace, etc.)
     PATHS.prompts,     // Reusable prompts
     PATHS.runtimes,    // Language runtimes (node, python, bun, deno)
-    PATHS.tools,       // Utility binaries (ffmpeg, git, jq, etc.)
+    PATHS.binaries,    // Utility binaries (ffmpeg, git, jq, etc.)
     PATHS.agents,      // AI CLI agents (claude, codex, gemini, copilot)
     PATHS.bins,        // Shims directory (Studio only)
     PATHS.locks,       // Lock files
@@ -194,15 +196,15 @@ export function areDirectoriesInitialized() {
 /**
  * All valid package kinds
  */
-export const PACKAGE_KINDS = ['stack', 'prompt', 'runtime', 'tool', 'agent'];
+export const PACKAGE_KINDS = ['stack', 'prompt', 'runtime', 'binary', 'agent'];
 
 /**
  * Parse a package ID into kind and name
- * @param {string} id - Package ID (e.g., 'stack:pdf-creator', 'tool:ffmpeg', 'agent:claude')
+ * @param {string} id - Package ID (e.g., 'stack:pdf-creator', 'binary:ffmpeg', 'agent:claude')
  * @returns {[string, string]} [kind, name]
  */
 export function parsePackageId(id) {
-  const match = id.match(/^(stack|prompt|runtime|tool|agent):(.+)$/);
+  const match = id.match(/^(stack|prompt|runtime|binary|agent):(.+)$/);
   if (!match) {
     throw new Error(`Invalid package ID: ${id} (expected format: kind:name, where kind is one of: ${PACKAGE_KINDS.join(', ')})`);
   }
@@ -221,7 +223,7 @@ export function createPackageId(kind, name) {
 
 /**
  * Get path for an installed package
- * @param {string} id - Package ID (e.g., 'stack:pdf-creator', 'tool:ffmpeg', 'agent:claude')
+ * @param {string} id - Package ID (e.g., 'stack:pdf-creator', 'binary:ffmpeg', 'agent:claude')
  * @returns {string} Install path
  */
 export function getPackagePath(id) {
@@ -235,8 +237,8 @@ export function getPackagePath(id) {
       return path.join(PATHS.prompts, `${name}.md`);
     case 'runtime':
       return path.join(PATHS.runtimes, name);
-    case 'tool':
-      return path.join(PATHS.tools, name);
+    case 'binary':
+      return path.join(PATHS.binaries, name);
     case 'agent':
       return path.join(PATHS.agents, name);
     default:
@@ -251,7 +253,8 @@ export function getPackagePath(id) {
  */
 export function getLockfilePath(id) {
   const [kind, name] = parsePackageId(id);
-  return path.join(PATHS.locks, kind + 's', `${name}.lock.yaml`);
+  const lockDir = kind === 'binary' ? 'binaries' : kind + 's';
+  return path.join(PATHS.locks, lockDir, `${name}.lock.yaml`);
 }
 
 /**
@@ -311,7 +314,7 @@ export function isPackageInstalled(id) {
 
 /**
  * Get list of installed packages by kind
- * @param {'stack' | 'prompt' | 'runtime' | 'tool' | 'agent'} kind
+ * @param {'stack' | 'prompt' | 'runtime' | 'binary' | 'agent'} kind
  * @returns {string[]} Package names
  */
 export function getInstalledPackages(kind) {
@@ -319,7 +322,7 @@ export function getInstalledPackages(kind) {
     stack: PATHS.stacks,
     prompt: PATHS.prompts,
     runtime: PATHS.runtimes,
-    tool: PATHS.tools,
+    binary: PATHS.binaries,
     agent: PATHS.agents
   }[kind];
 

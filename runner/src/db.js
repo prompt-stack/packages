@@ -1,6 +1,6 @@
 /**
- * Database re-exports for Prompt Stack runner
- * CLI/Studio should import db functions from runner, not directly from @prompt-stack/db
+ * Database re-exports for RUDI runner
+ * CLI/Studio should import db functions from runner, not directly from @learnrudi/db
  */
 
 export {
@@ -20,4 +20,4 @@ export {
 
   // Stats
   getStats
-} from '@prompt-stack/db';
+} from '@learnrudi/db';

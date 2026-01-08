@@ -1,5 +1,5 @@
 /**
- * Package installer for Prompt Stack
+ * Package installer for RUDI
  * Downloads, extracts, and installs packages
  */
 
@@ -8,8 +8,8 @@ import path from 'path';
 import { pipeline } from 'stream/promises';
 import { createWriteStream } from 'fs';
 import { createGunzip } from 'zlib';
-import { PATHS, getPackagePath, ensureDirectories, parsePackageId } from '@prompt-stack/env';
-import { downloadRuntime, downloadPackage, downloadTool } from '@prompt-stack/registry-client';
+import { PATHS, getPackagePath, ensureDirectories, parsePackageId } from '@learnrudi/env';
+import { downloadRuntime, downloadPackage, downloadTool } from '@learnrudi/registry-client';
 import { resolvePackage, getInstallOrder } from './resolver.js';
 import { writeLockfile } from './lockfile.js';
 
@@ -101,9 +101,9 @@ async function installSinglePackage(pkg, options = {}) {
     return { success: true, id: pkg.id, path: installPath, skipped: true };
   }
 
-  // Handle runtimes, tools, agents - download from GitHub releases or install via npm
-  if (pkg.kind === 'runtime' || pkg.kind === 'tool' || pkg.kind === 'agent') {
-    const pkgName = pkg.id.replace(/^(runtime|tool|agent):/, '');
+  // Handle runtimes, binaries, agents - download from GitHub releases or install via npm
+  if (pkg.kind === 'runtime' || pkg.kind === 'binary' || pkg.kind === 'agent') {
+    const pkgName = pkg.id.replace(/^(runtime|binary|agent):/, '');
 
     onProgress?.({ phase: 'downloading', package: pkg.id });
 
@@ -176,7 +176,7 @@ async function installSinglePackage(pkg, options = {}) {
 
         onProgress?.({ phase: 'installing', package: pkg.id, message: `pip install ${pkg.pipPackage}` });
 
-        // Use downloaded Python from ~/.prompt-stack/runtimes/python/ if available
+        // Use downloaded Python from ~/.prompt/runtimes/python/ if available
         // Otherwise fall back to system python3
         const pythonPath = path.join(PATHS.runtimes, 'python', 'bin', 'python3');
         const pythonCmd = fs.existsSync(pythonPath) ? pythonPath : 'python3';
@@ -208,12 +208,12 @@ async function installSinglePackage(pkg, options = {}) {
       }
     }
 
-    // Handle binary packages - tools use upstream URLs, runtimes use GitHub releases
+    // Handle binary packages - binaries use upstream URLs, runtimes use GitHub releases
     const version = pkg.version?.replace(/\.x$/, '.0') || '1.0.0';
 
     try {
-      if (pkg.kind === 'tool') {
-        // Tools: use upstream URLs from tool manifests (e.g., evermeet.cx for ffmpeg)
+      if (pkg.kind === 'binary') {
+        // Binaries: use upstream URLs from binary manifests (e.g., evermeet.cx for ffmpeg)
         await downloadTool(pkgName, installPath, {
           onProgress: (p) => onProgress?.({ ...p, package: pkg.id })
         });
@@ -344,7 +344,8 @@ export async function uninstallPackage(id) {
     }
 
     // Remove lockfile
-    const lockPath = path.join(PATHS.locks, kind + 's', `${name}.lock.yaml`);
+    const lockDir = kind === 'binary' ? 'binaries' : kind + 's';
+    const lockPath = path.join(PATHS.locks, lockDir, `${name}.lock.yaml`);
     if (fs.existsSync(lockPath)) {
       fs.unlinkSync(lockPath);
     }
@@ -429,11 +430,11 @@ async function copyDirectory(src, dest) {
 
 /**
  * List all installed packages
- * @param {'stack' | 'prompt' | 'runtime' | 'tool' | 'agent'} [kind] - Filter by kind
+ * @param {'stack' | 'prompt' | 'runtime' | 'binary' | 'agent'} [kind] - Filter by kind
  * @returns {Promise<Array>}
  */
 export async function listInstalled(kind) {
-  const kinds = kind ? [kind] : ['stack', 'prompt', 'runtime', 'tool', 'agent'];
+  const kinds = kind ? [kind] : ['stack', 'prompt', 'runtime', 'binary', 'agent'];
   const packages = [];
 
   for (const k of kinds) {
@@ -441,7 +442,7 @@ export async function listInstalled(kind) {
       stack: PATHS.stacks,
       prompt: PATHS.prompts,
       runtime: PATHS.runtimes,
-      tool: PATHS.tools,
+      binary: PATHS.binaries,
       agent: PATHS.agents
     }[k];
 
@@ -638,7 +639,7 @@ async function findNpmExecutable() {
   const binDir = isWindows ? '' : 'bin';
   const exe = isWindows ? 'npm.cmd' : 'npm';
 
-  // Try bundled npm from Studio (in ~/.prompt-stack/runtimes/node/)
+  // Try bundled npm from Studio (in ~/.prompt/runtimes/node/)
   const bundledNodeBase = path.join(PATHS.runtimes, 'node');
 
   // Try architecture-specific path first (e.g., node/arm64/bin/npm)
@@ -670,7 +671,7 @@ async function findPythonExecutable() {
   const binDir = isWindows ? '' : 'bin';
   const exe = isWindows ? 'python.exe' : 'python3';
 
-  // Try bundled python from Studio (in ~/.prompt-stack/runtimes/python/)
+  // Try bundled python from Studio (in ~/.prompt/runtimes/python/)
   const bundledPythonBase = path.join(PATHS.runtimes, 'python');
 
   // Try architecture-specific path first (e.g., python/arm64/bin/python3)

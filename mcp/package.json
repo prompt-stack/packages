@@ -1,0 +1,24 @@
+{
+  "name": "@learnrudi/mcp",
+  "version": "1.0.0",
+  "description": "MCP registry utilities for RUDI",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./agents": "./src/agents.js",
+    "./registry": "./src/registry.js"
+  },
+  "scripts": {
+    "test": "node --test src/__tests__/"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

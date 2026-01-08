@@ -1,10 +1,10 @@
 /**
- * Dependency resolver for Prompt Stack
+ * Dependency resolver for RUDI
  * Resolves package dependencies and version constraints
  */
 
-import { getPackage } from '@prompt-stack/registry-client';
-import { isPackageInstalled, parsePackageId } from '@prompt-stack/env';
+import { getPackage } from '@learnrudi/registry-client';
+import { isPackageInstalled, parsePackageId } from '@learnrudi/env';
 
 /**
  * Resolve a package and all its dependencies
@@ -76,19 +76,23 @@ async function resolveDependencies(pkg) {
     }
   }
 
-  // Resolve tool dependencies
-  const tools = pkg.requires?.tools || [];
-  for (const tool of tools) {
-    const toolId = tool.startsWith('tool:') ? tool : `tool:${tool}`;
-    const toolPkg = await getPackage(toolId);
+  // Resolve binary dependencies
+  const binaries = pkg.requires?.binaries || pkg.requires?.tools || [];
+  for (const binary of binaries) {
+    const binaryId = binary.startsWith('binary:')
+      ? binary
+      : binary.startsWith('tool:')
+        ? binary.replace(/^tool:/, 'binary:')
+        : `binary:${binary}`;
+    const binaryPkg = await getPackage(binaryId);
 
-    if (toolPkg) {
+    if (binaryPkg) {
       dependencies.push({
-        id: toolId,
-        kind: 'tool',
-        name: toolPkg.name,
-        version: toolPkg.version,
-        installed: isPackageInstalled(toolId),
+        id: binaryId,
+        kind: 'binary',
+        name: binaryPkg.name,
+        version: binaryPkg.version,
+        installed: isPackageInstalled(binaryId),
         dependencies: []
       });
     }

@@ -158,8 +158,8 @@ export function parseStructuredOutput(output) {
   const structured = [];
   let text = output;
 
-  // Look for __PSTACK_OUTPUT__ markers
-  const regex = /__PSTACK_OUTPUT__(.+?)__END_PSTACK_OUTPUT__/gs;
+  // Look for __RUDI_OUTPUT__ markers
+  const regex = /__RUDI_OUTPUT__(.+?)__END_RUDI_OUTPUT__/gs;
   let match;
 
   while ((match = regex.exec(output)) !== null) {

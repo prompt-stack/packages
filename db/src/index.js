@@ -1,15 +1,14 @@
 /**
- * Database connection module for Prompt Stack
+ * Database connection module for RUDI
  * Uses better-sqlite3 for synchronous, fast SQLite access
  */
 
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
-import { PATHS } from '@prompt-stack/env';
+import { PATHS } from '@learnrudi/env';
 
-// Re-export for convenience (deprecated - use @prompt-stack/env directly)
-export const PROMPT_STACK_HOME = PATHS.home;
+// Re-export for convenience
 export const DB_PATH = PATHS.dbFile;
 
 let db = null;
@@ -102,3 +101,5 @@ export function getDbSize() {
 export * from './schema.js';
 export * from './search.js';
 export * from './stats.js';
+export * from './logs.js';
+export * from './import.js';

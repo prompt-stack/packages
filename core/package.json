@@ -1,7 +1,7 @@
 {
-  "name": "@prompt-stack/core",
+  "name": "@learnrudi/core",
   "version": "1.0.0",
-  "description": "Core logic for Prompt Stack - resolve, install, lockfiles",
+  "description": "Core logic for RUDI - resolve, install, lockfiles",
   "type": "module",
   "main": "src/index.js",
   "exports": {
@@ -14,9 +14,9 @@
     "test": "node --test src/__tests__/"
   },
   "dependencies": {
-    "@prompt-stack/env": "workspace:*",
-    "@prompt-stack/manifest": "workspace:*",
-    "@prompt-stack/registry-client": "workspace:*",
+    "@learnrudi/env": "workspace:*",
+    "@learnrudi/manifest": "workspace:*",
+    "@learnrudi/registry-client": "workspace:*",
     "yaml": "^2.3.4"
   },
   "engines": {

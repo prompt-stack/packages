@@ -1,5 +1,5 @@
 /**
- * Stats module for Prompt Stack
+ * Stats module for RUDI
  * Provides aggregation queries for usage analytics
  */
 

@@ -259,7 +259,7 @@ export function findStackManifest(dir) {
 
 /**
  * Get the short ID from a full ID
- * @param {string} id - Full ID (e.g., 'stack:pdf-creator', 'tool:ffmpeg', 'agent:claude')
+ * @param {string} id - Full ID (e.g., 'stack:pdf-creator', 'binary:ffmpeg', 'agent:claude')
  * @returns {string} Short ID (e.g., 'pdf-creator')
  */
 export function getShortId(id) {

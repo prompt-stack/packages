@@ -1,5 +1,5 @@
 /**
- * Manifest parsing and validation for Prompt Stack
+ * Manifest parsing and validation for RUDI
  * Handles stack.yaml, prompt.yaml, and runtime descriptors
  */
 
