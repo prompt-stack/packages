@@ -4,7 +4,7 @@
 
 import { getDb } from './index.js';
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 const SCHEMA_SQL = `
 -- Schema version tracking
@@ -55,8 +55,19 @@ CREATE TABLE IF NOT EXISTS sessions (
 
   -- Context
   cwd TEXT,
+  dir_scope TEXT DEFAULT 'project',
   git_branch TEXT,
   native_storage_path TEXT,
+
+  -- Claude-specific metadata
+  inherit_project_prompt INTEGER DEFAULT 1,
+  is_warmup INTEGER DEFAULT 0,
+  parent_session_id TEXT,
+  agent_id TEXT,
+  is_sidechain INTEGER DEFAULT 0,
+  session_type TEXT DEFAULT 'task',
+  version TEXT,
+  user_type TEXT DEFAULT 'external',
 
   -- Timestamps
   created_at TEXT NOT NULL,
@@ -507,6 +518,21 @@ function runMigrations(db, from, to) {
         CREATE INDEX IF NOT EXISTS idx_packages_status ON packages(status);
 
         PRAGMA foreign_keys=ON;
+      `);
+    },
+
+    // Version 5: Add session metadata columns for Claude import
+    5: (db) => {
+      db.exec(`
+        ALTER TABLE sessions ADD COLUMN dir_scope TEXT DEFAULT 'project';
+        ALTER TABLE sessions ADD COLUMN inherit_project_prompt INTEGER DEFAULT 1;
+        ALTER TABLE sessions ADD COLUMN is_warmup INTEGER DEFAULT 0;
+        ALTER TABLE sessions ADD COLUMN parent_session_id TEXT;
+        ALTER TABLE sessions ADD COLUMN agent_id TEXT;
+        ALTER TABLE sessions ADD COLUMN is_sidechain INTEGER DEFAULT 0;
+        ALTER TABLE sessions ADD COLUMN session_type TEXT DEFAULT 'task';
+        ALTER TABLE sessions ADD COLUMN version TEXT;
+        ALTER TABLE sessions ADD COLUMN user_type TEXT DEFAULT 'external';
       `);
     }
   };
