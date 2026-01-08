@@ -14,9 +14,9 @@
     "test": "node --test src/__tests__/"
   },
   "dependencies": {
-    "@learnrudi/env": "workspace:*",
-    "@learnrudi/manifest": "workspace:*",
-    "@learnrudi/registry-client": "workspace:*",
+    "@learnrudi/env": "^1.0.0",
+    "@learnrudi/manifest": "^1.0.0",
+    "@learnrudi/registry-client": "^1.0.0",
     "yaml": "^2.3.4"
   },
   "engines": {

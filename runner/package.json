@@ -15,9 +15,9 @@
     "test": "node --test src/__tests__/"
   },
   "dependencies": {
-    "@learnrudi/core": "workspace:*",
-    "@learnrudi/db": "workspace:*",
-    "@learnrudi/manifest": "workspace:*"
+    "@learnrudi/core": "^1.0.0",
+    "@learnrudi/db": "^1.0.0",
+    "@learnrudi/manifest": "^1.0.0"
   },
   "devDependencies": {},
   "engines": {
