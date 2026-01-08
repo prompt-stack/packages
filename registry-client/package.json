@@ -1,6 +1,6 @@
 {
   "name": "@learnrudi/registry-client",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Registry client for RUDI - fetch, cache, download, verify",
   "type": "module",
   "main": "src/index.js",

@@ -1,6 +1,6 @@
 {
   "name": "@learnrudi/runner",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Execution engine for RUDI - spawn processes, stream logs",
   "type": "module",
   "main": "src/index.js",

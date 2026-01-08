@@ -1,6 +1,6 @@
 {
   "name": "@learnrudi/db",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Database layer for RUDI - tracks installs, runs, and artifacts",
   "type": "module",
   "main": "src/index.js",
