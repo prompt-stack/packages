@@ -8,7 +8,9 @@
     ".": "./src/index.js",
     "./resolver": "./src/resolver.js",
     "./installer": "./src/installer.js",
-    "./lockfile": "./src/lockfile.js"
+    "./lockfile": "./src/lockfile.js",
+    "./rudi-config": "./src/rudi-config.js",
+    "./tool-index": "./src/tool-index.js"
   },
   "scripts": {
     "test": "node --test src/__tests__/"

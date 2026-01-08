@@ -31,3 +31,5 @@ export * from './resolver.js';
 export * from './installer.js';
 export * from './lockfile.js';
 export * from './deps.js';
+export * from './rudi-config.js';
+export * from './tool-index.js';
